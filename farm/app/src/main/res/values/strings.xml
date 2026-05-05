@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Conexión Fármaco</string>
+    <string name="bienvenido">Bienvenido/a</string>
+    <string name="conexion_farmacos">CONEXION\nFARMACOS</string>
+    <string name="inicio_sesion">Inicio Sesión</string>
+    <string name="eres_nuevo">¿Eres nuevo?</string>
+    <string name="registrate">Regístrate</string>
+    <string name="correo">Correo</string>
+    <string name="contrasena">Contraseña</string>
+    <string name="ingresar">Ingresar</string>
+    <string name="nombres">Nombres:</string>
+    <string name="apellidos">Apellidos:</string>
+    <string name="telefono">Teléfono:</string>
+    <string name="confirmar_contrasena">Confirmar contraseña:</string>
+    <string name="guardar">Guardar</string>
+    <string name="atras">&lt;</string>
+</resources>
