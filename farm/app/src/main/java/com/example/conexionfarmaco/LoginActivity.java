@@ -35,7 +35,6 @@ public class LoginActivity extends AppCompatActivity {
         }
 
         try {
-            // Construir el selector para CouchDB
             JSONObject selector = new JSONObject();
             JSONObject query = new JSONObject();
             query.put("correo", cor);
@@ -53,6 +52,11 @@ public class LoginActivity extends AppCompatActivity {
                     JSONObject userDoc = docs.getJSONObject(0);
                     String nombre = userDoc.getString("nombres");
                     
+                    // Guardar datos del usuario localmente
+                    getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                            .putString("userData", userDoc.toString())
+                            .apply();
+
                     mostrar("Bienvenido " + nombre);
                     
                     Intent intent = new Intent(LoginActivity.this, HomeActivity.class);

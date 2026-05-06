@@ -43,6 +43,8 @@
         <activity android:name=".LoginActivity" />
         <activity android:name=".RegistroActivity" />
         <activity android:name=".HomeActivity" />
+        <activity android:name=".FarmaciasActivity" />
+        <activity android:name=".PerfilActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

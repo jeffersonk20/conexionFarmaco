@@ -14,4 +14,8 @@
     <string name="confirmar_contrasena">Confirmar contraseña:</string>
     <string name="guardar">Guardar</string>
     <string name="atras">&lt;</string>
+    <string name="perfil">Perfil</string>
+    <string name="cambiar_foto">Cambiar Foto de Perfil</string>
+    <string name="cerrar_sesion">Cerrar Sesión</string>
+    <string name="informacion_personal">Información Personal</string>
 </resources>
