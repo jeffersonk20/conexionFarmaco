@@ -13,6 +13,8 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.view.View;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -35,9 +37,10 @@ import java.util.Locale;
 
 public class PerfilActivity extends AppCompatActivity {
 
-    private ImageView imgPerfil;
-    private TextView tvNombre, tvCorreo, tvTelefono, tvCorreoDetalle;
+    private ImageView imgPerfil, btnEditarDatos, btnAgregarDireccion;
+    private TextView tvNombre, tvCorreo, tvTelefono, tvCorreoDetalle, tvSinCompras, tvAlergias, tvTipoSangre, tvDireccionPrincipal, tvEnfermedades;
     private Button btnCambiarFoto, btnCerrarSesion;
+    private LinearLayout containerHistorial;
     private String urlFoto = "";
     private JSONObject userData;
 
@@ -57,6 +60,14 @@ public class PerfilActivity extends AppCompatActivity {
         tvCorreoDetalle = findViewById(R.id.tvCorreoDetalle);
         btnCambiarFoto = findViewById(R.id.btnCambiarFoto);
         btnCerrarSesion = findViewById(R.id.btnCerrarSesion);
+        btnEditarDatos = findViewById(R.id.btnEditarDatos);
+        containerHistorial = findViewById(R.id.containerHistorial);
+        tvSinCompras = findViewById(R.id.tvSinCompras);
+        tvAlergias = findViewById(R.id.tvAlergias);
+        tvTipoSangre = findViewById(R.id.tvTipoSangre);
+        tvDireccionPrincipal = findViewById(R.id.tvDireccionPrincipal);
+        tvEnfermedades = findViewById(R.id.tvEnfermedades);
+        btnAgregarDireccion = findViewById(R.id.btnAgregarDireccion);
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         if (toolbar != null) {
@@ -68,9 +79,157 @@ public class PerfilActivity extends AppCompatActivity {
         }
 
         cargarDatosSeguros();
+        cargarHistorial();
 
         if (btnCambiarFoto != null) btnCambiarFoto.setOnClickListener(v -> elegirImagen());
         if (btnCerrarSesion != null) btnCerrarSesion.setOnClickListener(v -> cerrarSesion());
+        if (btnEditarDatos != null) btnEditarDatos.setOnClickListener(v -> mostrarDialogoEditar());
+        if (btnAgregarDireccion != null) btnAgregarDireccion.setOnClickListener(v -> mostrarDialogoDireccion());
+    }
+
+    private void cargarHistorial() {
+        // Por ahora simularemos que no hay compras, 
+        // pero aquí es donde se conectaría a una base de datos de 'ventas' o 'pedidos'
+        if (tvSinCompras != null) {
+            tvSinCompras.setVisibility(View.VISIBLE);
+            tvSinCompras.setText("Buscando tus últimas compras...");
+            
+            // Simular carga exitosa (pero vacía por ahora)
+            new android.os.Handler().postDelayed(() -> {
+                if (tvSinCompras != null) {
+                    tvSinCompras.setText("No tienes compras registradas recientemente");
+                }
+            }, 2000);
+        }
+    }
+
+    private void mostrarDialogoEditar() {
+        if (userData == null) return;
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Editar Información");
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+
+        final android.widget.EditText inputNombre = new android.widget.EditText(this);
+        inputNombre.setHint("Nombres");
+        inputNombre.setText(userData.optString("nombres", ""));
+        layout.addView(inputNombre);
+
+        final android.widget.EditText inputApellido = new android.widget.EditText(this);
+        inputApellido.setHint("Apellidos");
+        inputApellido.setText(userData.optString("apellidos", ""));
+        layout.addView(inputApellido);
+
+        final android.widget.EditText inputTel = new android.widget.EditText(this);
+        inputTel.setHint("Teléfono");
+        inputTel.setText(userData.optString("telefono", ""));
+        layout.addView(inputTel);
+
+        final android.widget.EditText inputAlergias = new android.widget.EditText(this);
+        inputAlergias.setHint("Alergias (ej: Penicilina)");
+        inputAlergias.setText(userData.optString("alergias", ""));
+        layout.addView(inputAlergias);
+
+        final android.widget.EditText inputSangre = new android.widget.EditText(this);
+        inputSangre.setHint("Tipo de Sangre");
+        inputSangre.setText(userData.optString("tipo_sangre", ""));
+        layout.addView(inputSangre);
+
+        final android.widget.EditText inputEnfermedades = new android.widget.EditText(this);
+        inputEnfermedades.setHint("Enfermedades Crónicas");
+        inputEnfermedades.setText(userData.optString("enfermedades", ""));
+        layout.addView(inputEnfermedades);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("Guardar", (dialog, which) -> {
+            actualizarDatosServidor(
+                inputNombre.getText().toString(),
+                inputApellido.getText().toString(),
+                inputTel.getText().toString(),
+                inputAlergias.getText().toString(),
+                inputSangre.getText().toString(),
+                inputEnfermedades.getText().toString()
+            );
+        });
+        builder.setNegativeButton("Cancelar", (dialog, id) -> dialog.cancel());
+
+        builder.show();
+    }
+
+    private void mostrarDialogoDireccion() {
+        if (userData == null) return;
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Agregar Dirección");
+
+        final android.widget.EditText inputDir = new android.widget.EditText(this);
+        inputDir.setHint("Ej: Calle Principal #123, Colonia Escalón");
+        inputDir.setText(userData.optString("direccion", ""));
+        builder.setView(inputDir);
+
+        builder.setPositiveButton("Guardar", (dialog, which) -> {
+            guardarDireccionServidor(inputDir.getText().toString());
+        });
+        builder.setNegativeButton("Cancelar", null);
+        builder.show();
+    }
+
+    private void guardarDireccionServidor(String dir) {
+        new Thread(() -> {
+            try {
+                userData.put("direccion", dir);
+                actualizarDocumentoEnCouch();
+            } catch (Exception e) {
+                Log.e("Perfil", "Error dir", e);
+            }
+        }).start();
+    }
+
+    private void actualizarDatosServidor(String nom, String ape, String tel, String alergias, String sangre, String enfermedades) {
+        if (userData == null) return;
+        
+        new Thread(() -> {
+            try {
+                userData.put("nombres", nom);
+                userData.put("apellidos", ape);
+                userData.put("telefono", tel);
+                userData.put("alergias", alergias);
+                userData.put("tipo_sangre", sangre);
+                userData.put("enfermedades", enfermedades);
+                
+                actualizarDocumentoEnCouch();
+            } catch (Exception e) {
+                Log.e("Perfil", "Error editando", e);
+            }
+        }).start();
+    }
+
+    private void actualizarDocumentoEnCouch() {
+        try {
+            String id = userData.optString("_id", "");
+            String urlUpdate = Utilidades.url_mto + "/" + id;
+            
+            TareaServidor tarea = new TareaServidor();
+            String res = tarea.execute(userData.toString(), "PUT", urlUpdate).get();
+            
+            JSONObject resJson = new JSONObject(res);
+            if (resJson.optBoolean("ok", false)) {
+                userData.put("_rev", resJson.getString("rev"));
+                getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                        .putString("userData", userData.toString()).apply();
+                
+                runOnUiThread(() -> {
+                    actualizarUI(userData.toString());
+                    Toast.makeText(this, "Datos actualizados", Toast.LENGTH_SHORT).show();
+                });
+            }
+        } catch (Exception e) {
+            Log.e("Perfil", "Error sync", e);
+        }
     }
 
     private void cargarDatosSeguros() {
@@ -132,6 +291,14 @@ public class PerfilActivity extends AppCompatActivity {
             if (tvCorreo != null) tvCorreo.setText(cor);
             if (tvCorreoDetalle != null) tvCorreoDetalle.setText(cor);
             if (tvTelefono != null) tvTelefono.setText(tel);
+            if (tvAlergias != null) tvAlergias.setText(json.optString("alergias", "Ninguna registrada"));
+            if (tvTipoSangre != null) tvTipoSangre.setText(json.optString("tipo_sangre", "No especificado"));
+            if (tvEnfermedades != null) tvEnfermedades.setText(json.optString("enfermedades", "Ninguna registrada"));
+            
+            if (tvDireccionPrincipal != null) {
+                String dir = json.optString("direccion", "No has agregado direcciones");
+                tvDireccionPrincipal.setText(dir);
+            }
 
             if (!fotoPath.isEmpty() && imgPerfil != null) {
                 cargarImagenDesdeRuta(fotoPath);

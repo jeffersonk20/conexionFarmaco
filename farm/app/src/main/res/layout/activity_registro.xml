@@ -88,7 +88,39 @@
                 <EditText android:id="@+id/etPassword" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Mínimo 6 caracteres" android:inputType="textPassword" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/confirmar_contrasena" android:textSize="15sp" android:textStyle="bold" android:textColor="#BDBDBD" android:layout_marginBottom="4dp"/>
-                <EditText android:id="@+id/etConfirmarPassword" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Repite tu contraseña" android:inputType="textPassword" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="30dp"/>
+                <EditText android:id="@+id/etConfirmarPassword" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Repite tu contraseña" android:inputType="textPassword" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Dirección de Envío" android:textSize="15sp" android:textStyle="bold" android:textColor="#BDBDBD" android:layout_marginBottom="4dp"/>
+                <EditText android:id="@+id/etDireccion" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Ej: Calle 1, Colonia 2" android:inputType="textPostalAddress" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Enfermedades Crónicas" android:textSize="15sp" android:textStyle="bold" android:textColor="#BDBDBD" android:layout_marginBottom="4dp"/>
+                <Spinner android:id="@+id/spEnfermedades" android:layout_width="match_parent" android:layout_height="55dp" android:background="@drawable/modern_edittext" android:popupBackground="#424242" android:layout_marginBottom="16dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="30dp"
+                    android:baselineAligned="false">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginEnd="8dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Alergias" android:textSize="15sp" android:textStyle="bold" android:textColor="#BDBDBD" android:layout_marginBottom="4dp"/>
+                        <EditText android:id="@+id/etAlergias" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Ej: Penicilina" android:inputType="text" android:textColor="#000000" android:textColorHint="#757575"/>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="140dp"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sangre" android:textSize="15sp" android:textStyle="bold" android:textColor="#BDBDBD" android:layout_marginBottom="4dp"/>
+                        <Spinner android:id="@+id/spTipoSangre" android:layout_width="match_parent" android:layout_height="55dp" android:background="@drawable/modern_edittext" android:popupBackground="#424242" />
+                    </LinearLayout>
+                </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"

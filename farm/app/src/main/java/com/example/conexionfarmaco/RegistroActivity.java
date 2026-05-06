@@ -7,9 +7,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -20,12 +22,16 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import org.json.JSONObject;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
 public class RegistroActivity extends AppCompatActivity {
-    EditText txtNombres, txtApellidos, txtTelefono, txtCorreo, txtClave, txtConfirmar;
+    EditText txtNombres, txtApellidos, txtTelefono, txtCorreo, txtClave, txtConfirmar, txtDireccion, txtAlergias;
+    Spinner spSangre, spEnfermedades;
     Button btnGuardar, btnAtras;
     ImageView imgFoto;
     String urlFoto = "";
@@ -45,6 +51,13 @@ public class RegistroActivity extends AppCompatActivity {
         txtCorreo = findViewById(R.id.etCorreo);
         txtClave = findViewById(R.id.etPassword);
         txtConfirmar = findViewById(R.id.etConfirmarPassword);
+        txtDireccion = findViewById(R.id.etDireccion);
+        txtAlergias = findViewById(R.id.etAlergias);
+        spSangre = findViewById(R.id.spTipoSangre);
+        spEnfermedades = findViewById(R.id.spEnfermedades);
+
+        configurarSpinners();
+
         btnGuardar = findViewById(R.id.btnGuardar);
         btnAtras = findViewById(R.id.btnAtras);
         imgFoto = findViewById(R.id.imgFotoRegistro);
@@ -52,6 +65,18 @@ public class RegistroActivity extends AppCompatActivity {
         imgFoto.setOnClickListener(v -> elegirImagen());
         btnGuardar.setOnClickListener(v -> guardar());
         btnAtras.setOnClickListener(v -> finish());
+    }
+
+    private void configurarSpinners() {
+        ArrayAdapter<CharSequence> adapterSangre = ArrayAdapter.createFromResource(this,
+                R.array.tipos_sangre, R.layout.spinner_item);
+        adapterSangre.setDropDownViewResource(R.layout.spinner_dropdown_item);
+        spSangre.setAdapter(adapterSangre);
+
+        ArrayAdapter<CharSequence> adapterEnfermedades = ArrayAdapter.createFromResource(this,
+                R.array.enfermedades, R.layout.spinner_item);
+        adapterEnfermedades.setDropDownViewResource(R.layout.spinner_dropdown_item);
+        spEnfermedades.setAdapter(adapterEnfermedades);
     }
 
     private void elegirImagen() {
@@ -128,10 +153,33 @@ public class RegistroActivity extends AppCompatActivity {
             } else if (requestCode == REQUEST_IMAGE_PICK && data != null) {
                 Uri selectedImage = data.getData();
                 if (selectedImage != null) {
-                    urlFoto = selectedImage.toString();
-                    imgFoto.setImageURI(selectedImage);
+                    guardarImagenLocalmente(selectedImage);
                 }
             }
+        }
+    }
+
+    private void guardarImagenLocalmente(Uri uri) {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(uri);
+            File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            File file = new File(storageDir, "REGISTRO_" + timeStamp + ".jpg");
+
+            OutputStream outputStream = new FileOutputStream(file);
+            byte[] buffer = new byte[1024];
+            int length;
+            if (inputStream != null) {
+                while ((length = inputStream.read(buffer)) > 0) {
+                    outputStream.write(buffer, 0, length);
+                }
+                outputStream.close();
+                inputStream.close();
+                urlFoto = file.getAbsolutePath();
+                imgFoto.setImageURI(Uri.fromFile(file));
+            }
+        } catch (Exception e) {
+            mostrar("Error al guardar imagen: " + e.getMessage());
         }
     }
 
@@ -143,6 +191,10 @@ public class RegistroActivity extends AppCompatActivity {
             String cor = txtCorreo.getText().toString();
             String cla = txtClave.getText().toString();
             String con = txtConfirmar.getText().toString();
+            String dir = txtDireccion.getText().toString();
+            String ale = txtAlergias.getText().toString();
+            String san = spSangre.getSelectedItem().toString();
+            String enf = spEnfermedades.getSelectedItem().toString();
 
             if (nom.isEmpty() || ape.isEmpty() || cor.isEmpty() || cla.isEmpty()) {
                 mostrar("Complete los campos obligatorios");
@@ -163,6 +215,10 @@ public class RegistroActivity extends AppCompatActivity {
             json.put("correo", cor);
             json.put("clave", cla);
             json.put("foto", urlFoto);
+            json.put("direccion", dir);
+            json.put("alergias", ale);
+            json.put("tipo_sangre", san);
+            json.put("enfermedades", enf);
 
             TareaServidor tarea = new TareaServidor();
             String resServer = tarea.execute(json.toString(), "POST", Utilidades.url_mto).get();

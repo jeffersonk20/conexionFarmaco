@@ -18,4 +18,28 @@
     <string name="cambiar_foto">Cambiar Foto de Perfil</string>
     <string name="cerrar_sesion">Cerrar Sesión</string>
     <string name="informacion_personal">Información Personal</string>
+
+    <string-array name="tipos_sangre">
+        <item>No especificado</item>
+        <item>A+</item>
+        <item>A-</item>
+        <item>B+</item>
+        <item>B-</item>
+        <item>AB+</item>
+        <item>AB-</item>
+        <item>O+</item>
+        <item>O-</item>
+    </string-array>
+
+    <string-array name="enfermedades">
+        <item>Ninguna</item>
+        <item>Diabetes</item>
+        <item>Hipertensión</item>
+        <item>Asma</item>
+        <item>Gastritis</item>
+        <item>Arritmia</item>
+        <item>Obesidad</item>
+        <item>Hipotiroidismo</item>
+        <item>Otras</item>
+    </string-array>
 </resources>
