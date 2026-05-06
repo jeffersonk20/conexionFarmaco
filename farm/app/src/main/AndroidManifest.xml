@@ -42,6 +42,7 @@
         </activity>
         <activity android:name=".LoginActivity" />
         <activity android:name=".RegistroActivity" />
+        <activity android:name=".HomeActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

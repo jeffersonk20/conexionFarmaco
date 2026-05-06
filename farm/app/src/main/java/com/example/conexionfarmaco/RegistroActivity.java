@@ -3,7 +3,6 @@ package com.example.conexionfarmaco;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -30,7 +29,6 @@ public class RegistroActivity extends AppCompatActivity {
     Button btnGuardar, btnAtras;
     ImageView imgFoto;
     String urlFoto = "";
-    DBHelper db;
 
     private static final int REQUEST_CAMERA_PERMISSION = 100;
     private static final int REQUEST_IMAGE_CAPTURE = 1;
@@ -40,8 +38,6 @@ public class RegistroActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_registro);
-
-        db = new DBHelper(this);
 
         txtNombres = findViewById(R.id.etNombres);
         txtApellidos = findViewById(R.id.etApellidos);
@@ -89,7 +85,7 @@ public class RegistroActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 tomarFoto();
             } else {
-                mostrar("Se requiere permiso de cámara para tomar fotos");
+                mostrar("Se requiere permiso de cámara");
             }
         }
     }
@@ -117,9 +113,8 @@ public class RegistroActivity extends AppCompatActivity {
 
     private File crearArchivoImagen() throws Exception {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        String imageFileName = "JPEG_" + timeStamp + "_";
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(imageFileName, ".jpg", storageDir);
+        File image = File.createTempFile("JPEG_" + timeStamp + "_", ".jpg", storageDir);
         urlFoto = image.getAbsolutePath();
         return image;
     }
@@ -128,37 +123,16 @@ public class RegistroActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
-            if (requestCode == REQUEST_IMAGE_CAPTURE) { // Cámara
+            if (requestCode == REQUEST_IMAGE_CAPTURE) {
                 imgFoto.setImageURI(Uri.parse(urlFoto));
-            } else if (requestCode == REQUEST_IMAGE_PICK && data != null) { // Galería
+            } else if (requestCode == REQUEST_IMAGE_PICK && data != null) {
                 Uri selectedImage = data.getData();
                 if (selectedImage != null) {
-                    urlFoto = getPathFromUri(selectedImage);
+                    urlFoto = selectedImage.toString();
                     imgFoto.setImageURI(selectedImage);
                 }
             }
         }
-    }
-
-    private String getPathFromUri(Uri uri) {
-        String result = null;
-        String[] projection = {MediaStore.Images.Media.DATA};
-        try {
-            Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
-            if (cursor != null) {
-                if (cursor.moveToFirst()) {
-                    int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-                    result = cursor.getString(columnIndex);
-                }
-                cursor.close();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        if (result == null) {
-            result = uri.getPath();
-        }
-        return result;
     }
 
     private void guardar() {
@@ -180,44 +154,30 @@ public class RegistroActivity extends AppCompatActivity {
                 return;
             }
 
-            if (db.buscarCorreo(cor)) {
-                mostrar("El correo ya está registrado");
-                return;
-            }
-
             String id = Utilidades.generarId();
-            String resLocal = db.administrarUsuarios("nuevo", new String[]{id, nom, ape, tel, cor, cla});
-            
-            if (resLocal.equals("ok")) {
-                JSONObject json = new JSONObject();
-                json.put("_id", id);
-                json.put("nombres", nom);
-                json.put("apellidos", ape);
-                json.put("telefono", tel);
-                json.put("correo", cor);
-                json.put("clave", cla);
-                json.put("foto", urlFoto);
+            JSONObject json = new JSONObject();
+            json.put("_id", id);
+            json.put("nombres", nom);
+            json.put("apellidos", ape);
+            json.put("telefono", tel);
+            json.put("correo", cor);
+            json.put("clave", cla);
+            json.put("foto", urlFoto);
 
-                TareaServidor tarea = new TareaServidor();
-                String resServer = tarea.execute(json.toString(), "POST", Utilidades.url_mto).get();
-                
-                try {
-                    JSONObject resJson = new JSONObject(resServer);
-                    if (resJson.has("ok") && resJson.getBoolean("ok")) {
-                        mostrar("Usuario registrado con éxito");
-                        new MailManager(cor, nom).execute();
-                    } else {
-                        mostrar("Guardado localmente. Error nube: " + resServer);
-                    }
-                } catch (Exception jsonEx) {
-                    mostrar("Guardado localmente. Error de conexión: " + resServer);
-                }
-                
+            TareaServidor tarea = new TareaServidor();
+            String resServer = tarea.execute(json.toString(), "POST", Utilidades.url_mto).get();
+            
+            JSONObject resJson = new JSONObject(resServer);
+            if (resJson.has("ok") && resJson.getBoolean("ok")) {
+                mostrar("¡Registro exitoso!");
+                new MailManager(cor, nom).execute();
                 startActivity(new Intent(this, LoginActivity.class));
                 finish();
+            } else {
+                mostrar("Error al guardar en la nube: " + resServer);
             }
         } catch (Exception e) {
-            mostrar("Error: " + e.getMessage());
+            mostrar("Error de conexión: " + e.getMessage());
         }
     }
 
