@@ -46,6 +46,14 @@
         <activity android:name=".FarmaciasActivity" />
         <activity android:name=".PerfilActivity" />
 
+        <!-- Actividades de Administración -->
+        <activity android:name=".AdminMainActivity" />
+        <activity android:name=".AdminLoginActivity" />
+        <activity android:name=".AdminRegistroActivity" />
+        <activity android:name=".AdminHomeActivity" />
+        <activity android:name=".AdminMedicamentoActivity" />
+        <activity android:name=".FarmaciaDetalleActivity" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.example.conexionfarmaco.fileprovider"

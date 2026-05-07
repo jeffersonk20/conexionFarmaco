@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient_soft"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/tvAdminTituloMed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Agregar Medicamento"
+            android:textColor="@color/azul_primario"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="32dp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Nombre del Medicamento" android:textStyle="bold" android:textColor="@color/texto_secundario" />
+        <EditText android:id="@+id/etAdminMedNombre" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Paracetamol" android:layout_marginBottom="16dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Precio de Venta ($)" android:textStyle="bold" android:textColor="@color/texto_secundario" />
+        <EditText android:id="@+id/etAdminMedPrecio" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="1.50" android:inputType="numberDecimal" android:layout_marginBottom="16dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Existencias (Stock)" android:textStyle="bold" android:textColor="@color/texto_secundario" />
+        <EditText android:id="@+id/etAdminMedStock" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="100" android:inputType="number" android:layout_marginBottom="16dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Presentación" android:textStyle="bold" android:textColor="@color/texto_secundario" />
+        <EditText android:id="@+id/etAdminMedPresentacion" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Caja 20 tabletas" android:layout_marginBottom="16dp"/>
+
+        <CheckBox
+            android:id="@+id/cbAdminMedPromocion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Producto en Promoción"
+            android:textColor="@color/azul_vibrante"
+            android:textStyle="bold"
+            android:layout_marginBottom="32dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp">
+
+            <Button
+                android:id="@+id/btnAdminMedEliminar"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:background="@drawable/modern_edittext"
+                android:text="Eliminar Medicamento"
+                android:textColor="#E53935"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:backgroundTint="@null" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="20dp">
+
+            <Button
+                android:id="@+id/btnAdminMedCancelar"
+                android:layout_width="0dp"
+                android:layout_height="60dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/modern_edittext"
+                android:text="Cancelar"
+                android:textColor="@color/azul_primario"
+                app:backgroundTint="@null" />
+
+            <Button
+                android:id="@+id/btnAdminMedGuardar"
+                android:layout_width="0dp"
+                android:layout_height="60dp"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/btn_modern_vibrant"
+                android:text="Agregar"
+                android:textColor="@color/white"
+                app:backgroundTint="@null" />
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

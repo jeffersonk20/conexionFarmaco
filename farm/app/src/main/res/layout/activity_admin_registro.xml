@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient_soft"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Registro de Farmacia"
+            android:textColor="@color/azul_primario"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="24dp" />
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cvAdminFoto"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="60dp"
+            app:cardElevation="8dp">
+            <ImageView
+                android:id="@+id/ivAdminFoto"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_camera"
+                android:padding="30dp"
+                android:background="#F2F2F2" />
+        </androidx.cardview.widget.CardView>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Nombre de la Empresa" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminEmpresa" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Ej: Farmacia Central" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Dirección" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminDireccion" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Dirección completa" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Teléfono" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminTelefono" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="7777 0000" android:inputType="phone" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Correo Electrónico" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminCorreo" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="correo@empresa.com" android:inputType="textEmailAddress" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Breve Presentación / Descripción" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminDescripcion" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Lo que verán tus clientes..." android:minLines="3" android:gravity="top" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Contraseña" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminPass" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:inputType="textPassword" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Confirmar Contraseña" android:textStyle="bold" android:textColor="@color/azul_primario" />
+        <EditText android:id="@+id/etAdminPassConfirm" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:inputType="textPassword" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="32dp" android:padding="15dp"/>
+
+        <Button
+            android:id="@+id/btnAdminGuardarRegistro"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:background="@drawable/btn_modern_vibrant"
+            android:text="Guardar Empresa"
+            android:textColor="@color/white"
+            android:textStyle="bold"
+            app:backgroundTint="@null" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

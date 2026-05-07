@@ -22,5 +22,9 @@ public class MainActivity extends AppCompatActivity {
         btnIrRegistro.setOnClickListener(v -> {
             startActivity(new Intent(MainActivity.this, RegistroActivity.class));
         });
+
+        findViewById(R.id.tvIrAdmin).setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, AdminMainActivity.class));
+        });
     }
 }

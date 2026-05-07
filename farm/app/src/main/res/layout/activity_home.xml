@@ -92,6 +92,7 @@
                 app:tint="@color/azul_vibrante" />
 
             <EditText
+                android:id="@+id/etBuscadorHome"
                 android:layout_width="match_parent"
                 android:layout_height="50dp"
                 android:background="@android:color/transparent"
@@ -115,7 +116,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/searchCard" />
 
-    <!-- Lista de Productos (Placeholder con colores de la imagen) -->
+    <!-- Lista de Productos -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -124,36 +125,11 @@
         app:layout_constraintTop_toBottomOf="@id/tvDestacados">
 
         <LinearLayout
+            android:id="@+id/containerHomeContenido"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <!-- Item 1 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:layout_marginBottom="2dp"
-                android:background="#FADBD8" />
-            <!-- Item 2 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:layout_marginBottom="2dp"
-                android:background="#D6EAF8" />
-            <!-- Item 3 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:layout_marginBottom="2dp"
-                android:background="#FADBD8" />
-            <!-- Item 4 -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:layout_marginBottom="2dp"
-                android:background="#D6EAF8" />
-
-        </LinearLayout>
+            android:orientation="vertical"
+            android:padding="16dp" />
     </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

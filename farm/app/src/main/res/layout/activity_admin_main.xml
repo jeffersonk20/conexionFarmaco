@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient_soft">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="32dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Administración"
+            android:textColor="@color/azul_primario"
+            android:textSize="18sp"
+            android:letterSpacing="0.1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="CONEXION\nFARMACOS"
+            android:textColor="@color/azul_primario"
+            android:textSize="34sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="40dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="160dp"
+            android:layout_height="160dp"
+            android:layout_marginBottom="60dp"
+            app:cardCornerRadius="80dp"
+            app:cardElevation="10dp">
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="30dp"
+                android:src="@android:drawable/ic_menu_edit"
+                android:contentDescription="Icono Admin"
+                app:tint="@color/azul_primario" />
+        </androidx.cardview.widget.CardView>
+
+        <Button
+            android:id="@+id/btnAdminIrLogin"
+            android:layout_width="match_parent"
+            android:layout_height="65dp"
+            android:background="@drawable/btn_modern_vibrant"
+            android:text="Inicio Sesión"
+            android:textAllCaps="false"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:backgroundTint="@null" />
+
+        <Button
+            android:id="@+id/btnAdminIrRegistro"
+            android:layout_width="match_parent"
+            android:layout_height="65dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/modern_edittext"
+            android:text="Registro"
+            android:textAllCaps="false"
+            android:textColor="@color/azul_primario"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:backgroundTint="@null" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -115,6 +115,17 @@
             android:stateListAnimator="@animator/button_push_3d"
             app:backgroundTint="@null" />
 
+        <TextView
+            android:id="@+id/tvIrAdmin"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Acceso Administración"
+            android:textColor="@color/azul_vibrante"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:padding="10dp" />
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
