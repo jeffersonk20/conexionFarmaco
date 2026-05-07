@@ -61,9 +61,19 @@ public class FarmaciasActivity extends AppCompatActivity {
         View card = getLayoutInflater().inflate(R.layout.item_farmacia_cliente, null);
         TextView tvNombre = card.findViewById(R.id.tvItemFarmaciaNombre);
         TextView tvDesc = card.findViewById(R.id.tvItemFarmaciaDesc);
+        ImageView ivLogo = card.findViewById(R.id.ivItemFarmaciaLogo);
         
         tvNombre.setText(farmacia.getString("empresa"));
         tvDesc.setText(farmacia.optString("descripcion", "Sin descripción disponible"));
+
+        String fotoPath = farmacia.optString("foto", "");
+        if (!fotoPath.isEmpty() && ivLogo != null) {
+            try {
+                ivLogo.setImageURI(android.net.Uri.parse(fotoPath));
+            } catch (Exception e) {
+                ivLogo.setImageResource(R.mipmap.ic_launcher);
+            }
+        }
 
         card.setOnClickListener(v -> {
             try {

@@ -52,6 +52,7 @@
         <activity android:name=".AdminRegistroActivity" />
         <activity android:name=".AdminHomeActivity" />
         <activity android:name=".AdminMedicamentoActivity" />
+        <activity android:name=".AdminPerfilActivity" />
         <activity android:name=".FarmaciaDetalleActivity" />
 
         <provider

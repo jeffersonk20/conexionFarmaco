@@ -36,6 +36,10 @@ public class AdminHomeActivity extends AppCompatActivity {
         fab.setOnClickListener(v -> {
             startActivity(new Intent(this, AdminMedicamentoActivity.class));
         });
+
+        findViewById(R.id.ivAdminProfile).setOnClickListener(v -> {
+            startActivity(new Intent(this, AdminPerfilActivity.class));
+        });
     }
 
     @Override

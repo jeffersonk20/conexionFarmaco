@@ -181,14 +181,9 @@ public class AdminRegistroActivity extends AppCompatActivity {
                 
                 JSONObject resJson = new JSONObject(res);
                 if (resJson.optBoolean("ok", false)) {
-                    SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
-                    editor.putString("farmaciaId", id);
-                    editor.putString("farmaciaNombre", emp);
-                    editor.apply();
-
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "Farmacia registrada con éxito", Toast.LENGTH_SHORT).show();
-                        startActivity(new Intent(this, AdminHomeActivity.class));
+                        Toast.makeText(this, "Farmacia registrada con éxito. Inicia Sesión.", Toast.LENGTH_LONG).show();
+                        startActivity(new Intent(this, AdminLoginActivity.class));
                         finish();
                     });
                 } else {
