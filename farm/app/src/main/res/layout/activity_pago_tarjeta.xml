@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bg_gradient_soft">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@color/azul_primario"
+        android:paddingHorizontal="16dp"
+        android:elevation="8dp">
+
+        <ImageView
+            android:id="@+id/btnPagoAtras"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_centerVertical="true"
+            android:src="@android:drawable/ic_menu_revert"
+            app:tint="@color/white"
+            android:contentDescription="Atrás" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Pago con Tarjeta"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Agregar una tarjeta de crédito o débito"
+                android:textColor="@color/azul_primario"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="24dp"/>
+
+            <Button
+                android:id="@+id/btnEscanearTarjeta"
+                android:layout_width="match_parent"
+                android:layout_height="55dp"
+                android:text="Escanear Tarjeta"
+                android:backgroundTint="@color/azul_vibrante"
+                android:textColor="@color/white"
+                android:layout_marginBottom="32dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Número de tarjeta" android:textColor="@color/texto_secundario" android:textStyle="bold" />
+            <EditText
+                android:id="@+id/etNumeroTarjeta"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:background="@drawable/modern_edittext"
+                android:hint="0000 0000 0000 0000"
+                android:inputType="number"
+                android:textColor="@color/black"
+                android:layout_marginBottom="16dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginEnd="8dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Vencimiento" android:textColor="@color/texto_secundario" android:textStyle="bold" />
+                    <EditText
+                        android:id="@+id/etFechaVenc"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:background="@drawable/modern_edittext"
+                        android:hint="MM/YY"
+                        android:inputType="date"
+                        android:textColor="@color/black"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="8dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CVV" android:textColor="@color/texto_secundario" android:textStyle="bold" />
+                    <EditText
+                        android:id="@+id/etCVV"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:background="@drawable/modern_edittext"
+                        android:hint="123"
+                        android:inputType="numberPassword"
+                        android:textColor="@color/black"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Nombre en la tarjeta" android:textColor="@color/texto_secundario" android:textStyle="bold" />
+            <EditText
+                android:id="@+id/etNombreTarjeta"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:background="@drawable/modern_edittext"
+                android:hint="Ej. Juan Pérez"
+                android:inputType="textPersonName"
+                android:textColor="@color/black"
+                android:layout_marginBottom="40dp"/>
+
+            <Button
+                android:id="@+id/btnAgregarTarjetaContinuar"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="CONTINUAR"
+                android:backgroundTint="@color/azul_vibrante"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

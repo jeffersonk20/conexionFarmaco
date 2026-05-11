@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="16dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@color/white">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvHistFecha"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Fecha: 2024-05-20"
+                android:textColor="@color/texto_secundario"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvHistEstado"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pendiente"
+                android:textColor="@color/azul_vibrante"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:background="#EBF5FB"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="PRODUCTOS:"
+            android:textColor="@color/azul_primario"
+            android:textStyle="bold"
+            android:textSize="12sp" />
+
+        <!-- Contenedor dinámico para productos -->
+        <LinearLayout
+            android:id="@+id/containerItemsHistorial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="5dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="15dp"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btnActualizarPedido"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Guardar Cambios"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:backgroundTint="@color/azul_vibrante"
+                android:textColor="@color/white"
+                android:layout_marginEnd="8dp"
+                android:visibility="gone" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1" />
+
+            <Button
+                android:id="@+id/btnCancelarPedido"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Cancelar Reserva"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:backgroundTint="#EC7063"
+                android:textColor="@color/white" />
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

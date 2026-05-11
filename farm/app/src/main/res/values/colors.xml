@@ -13,4 +13,6 @@
     <color name="azul_3d_shadow">#1A000000</color>
     <color name="gris_input">#F4F7F9</color>
     <color name="texto_secundario">#566573</color>
+    <color name="rosa_suave">#FADBD8</color>
+    <color name="rosa_fuerte">#F1948A</color>
 </resources>

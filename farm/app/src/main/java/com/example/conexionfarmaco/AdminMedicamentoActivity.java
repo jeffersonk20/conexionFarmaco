@@ -1,24 +1,38 @@
 package com.example.conexionfarmaco;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 public class AdminMedicamentoActivity extends AppCompatActivity {
 
     private EditText etNombre, etPrecio, etStock, etPresentacion;
     private CheckBox cbPromocion;
     private Button btnGuardar, btnCancelar, btnEliminar;
+    private ImageView ivFoto1, ivFoto2, ivFoto3;
     private String farmaciaId, farmaciaNombre;
     private JSONObject medEdicion;
+    
+    private String base64Foto1 = "", base64Foto2 = "", base64Foto3 = "";
+    private static final int PICK_IMAGE_1 = 1, PICK_IMAGE_2 = 2, PICK_IMAGE_3 = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,6 +47,14 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
         btnGuardar = findViewById(R.id.btnAdminMedGuardar);
         btnCancelar = findViewById(R.id.btnAdminMedCancelar);
         btnEliminar = findViewById(R.id.btnAdminMedEliminar);
+        
+        ivFoto1 = findViewById(R.id.ivAdminMedFoto1);
+        ivFoto2 = findViewById(R.id.ivAdminMedFoto2);
+        ivFoto3 = findViewById(R.id.ivAdminMedFoto3);
+
+        ivFoto1.setOnClickListener(v -> seleccionarImagen(PICK_IMAGE_1));
+        ivFoto2.setOnClickListener(v -> seleccionarImagen(PICK_IMAGE_2));
+        ivFoto3.setOnClickListener(v -> seleccionarImagen(PICK_IMAGE_3));
 
         SharedPreferences prefs = getSharedPreferences("AdminPrefs", MODE_PRIVATE);
         farmaciaId = prefs.getString("farmaciaId", "");
@@ -48,6 +70,14 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 etPresentacion.setText(medEdicion.optString("presentacion", ""));
                 cbPromocion.setChecked(medEdicion.optBoolean("promocion", false));
                 
+                base64Foto1 = medEdicion.optString("foto1", "");
+                base64Foto2 = medEdicion.optString("foto2", "");
+                base64Foto3 = medEdicion.optString("foto3", "");
+                
+                cargarImagenBase64(base64Foto1, ivFoto1);
+                cargarImagenBase64(base64Foto2, ivFoto2);
+                cargarImagenBase64(base64Foto3, ivFoto3);
+                
                 ((TextView)findViewById(R.id.tvAdminTituloMed)).setText("Editar Medicamento");
                 btnGuardar.setText("Actualizar");
                 btnEliminar.setVisibility(View.VISIBLE);
@@ -60,6 +90,70 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
 
         btnGuardar.setOnClickListener(v -> guardarMedicamento());
         btnCancelar.setOnClickListener(v -> finish());
+    }
+
+    private void seleccionarImagen(int requestCode) {
+        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(intent, requestCode);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri imageUri = data.getData();
+            try {
+                InputStream is = getContentResolver().openInputStream(imageUri);
+                Bitmap bitmap = BitmapFactory.decodeStream(is);
+                
+                // Redimensionar para no exceder límites de CouchDB/Memoria
+                bitmap = redimensionarBitmap(bitmap, 500);
+                
+                String base64 = bitmapToBase64(bitmap);
+                
+                if (requestCode == PICK_IMAGE_1) {
+                    base64Foto1 = base64;
+                    ivFoto1.setImageBitmap(bitmap);
+                } else if (requestCode == PICK_IMAGE_2) {
+                    base64Foto2 = base64;
+                    ivFoto2.setImageBitmap(bitmap);
+                } else if (requestCode == PICK_IMAGE_3) {
+                    base64Foto3 = base64;
+                    ivFoto3.setImageBitmap(bitmap);
+                }
+            } catch (Exception e) {
+                Log.e("AdminMed", "Error procesando imagen", e);
+            }
+        }
+    }
+
+    private Bitmap redimensionarBitmap(Bitmap image, int maxSize) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        float bitmapRatio = (float) width / (float) height;
+        if (bitmapRatio > 1) {
+            width = maxSize;
+            height = (int) (width / bitmapRatio);
+        } else {
+            height = maxSize;
+            width = (int) (height * bitmapRatio);
+        }
+        return Bitmap.createScaledBitmap(image, width, height, true);
+    }
+
+    private String bitmapToBase64(Bitmap bitmap) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+        byte[] b = baos.toByteArray();
+        return Base64.encodeToString(b, Base64.DEFAULT);
+    }
+
+    private void cargarImagenBase64(String base64, ImageView iv) {
+        if (base64 != null && !base64.isEmpty()) {
+            byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
+            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+            iv.setImageBitmap(decodedByte);
+        }
     }
 
     private void guardarMedicamento() {
@@ -89,6 +183,11 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 json.put("presentacion", preS);
                 json.put("promocion", pro);
                 json.put("tipo", "medicamento");
+                
+                // Agregar fotos
+                json.put("foto1", base64Foto1);
+                json.put("foto2", base64Foto2);
+                json.put("foto3", base64Foto3);
 
                 TareaServidor tarea = new TareaServidor();
                 String metodo = medEdicion != null ? "PUT" : "POST";

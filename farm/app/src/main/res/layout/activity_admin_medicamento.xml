@@ -24,16 +24,50 @@
             android:layout_marginBottom="32dp" />
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Nombre del Medicamento" android:textStyle="bold" android:textColor="@color/texto_secundario" />
-        <EditText android:id="@+id/etAdminMedNombre" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Paracetamol" android:layout_marginBottom="16dp"/>
+        <EditText
+            android:id="@+id/etAdminMedNombre"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/modern_edittext"
+            android:hint="Paracetamol"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:layout_marginBottom="16dp"/>
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Precio de Venta ($)" android:textStyle="bold" android:textColor="@color/texto_secundario" />
-        <EditText android:id="@+id/etAdminMedPrecio" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="1.50" android:inputType="numberDecimal" android:layout_marginBottom="16dp"/>
+        <EditText
+            android:id="@+id/etAdminMedPrecio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/modern_edittext"
+            android:hint="1.50"
+            android:inputType="numberDecimal"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:layout_marginBottom="16dp"/>
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Existencias (Stock)" android:textStyle="bold" android:textColor="@color/texto_secundario" />
-        <EditText android:id="@+id/etAdminMedStock" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="100" android:inputType="number" android:layout_marginBottom="16dp"/>
+        <EditText
+            android:id="@+id/etAdminMedStock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/modern_edittext"
+            android:hint="100"
+            android:inputType="number"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:layout_marginBottom="16dp"/>
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Presentación" android:textStyle="bold" android:textColor="@color/texto_secundario" />
-        <EditText android:id="@+id/etAdminMedPresentacion" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Caja 20 tabletas" android:layout_marginBottom="16dp"/>
+        <EditText
+            android:id="@+id/etAdminMedPresentacion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/modern_edittext"
+            android:hint="Caja 20 tabletas"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:layout_marginBottom="16dp"/>
 
         <CheckBox
             android:id="@+id/cbAdminMedPromocion"
@@ -42,7 +76,52 @@
             android:text="Producto en Promoción"
             android:textColor="@color/azul_vibrante"
             android:textStyle="bold"
-            android:layout_marginBottom="32dp" />
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Fotos del Medicamento (Toca para seleccionar)"
+            android:textStyle="bold"
+            android:textColor="@color/texto_secundario"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="32dp">
+
+            <ImageView
+                android:id="@+id/ivAdminMedFoto1"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/modern_edittext"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_camera"
+                app:tint="@color/azul_vibrante" />
+
+            <ImageView
+                android:id="@+id/ivAdminMedFoto2"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/modern_edittext"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_camera"
+                app:tint="@color/azul_vibrante" />
+
+            <ImageView
+                android:id="@+id/ivAdminMedFoto3"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:background="@drawable/modern_edittext"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_camera"
+                app:tint="@color/azul_vibrante" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"

@@ -51,9 +51,19 @@
         <activity android:name=".AdminLoginActivity" />
         <activity android:name=".AdminRegistroActivity" />
         <activity android:name=".AdminHomeActivity" />
-        <activity android:name=".AdminMedicamentoActivity" />
+        <activity
+            android:name=".AdminMedicamentoActivity"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name=".AdminPerfilActivity" />
+        <activity android:name=".AdminFacturacionActivity" />
+        <activity android:name=".HistorialPedidosActivity" />
         <activity android:name=".FarmaciaDetalleActivity" />
+        <activity android:name=".CarritoActivity" />
+        <activity android:name=".PagoActivity" />
+        <activity
+            android:name=".FacturacionActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ResumenPedidoActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

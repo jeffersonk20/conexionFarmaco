@@ -3,12 +3,17 @@ package com.example.conexionfarmaco;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -17,7 +22,9 @@ public class AdminHomeActivity extends AppCompatActivity {
 
     private TextView tvNombreFarmacia, tvSinMedicamentos;
     private LinearLayout containerMedicamentos;
+    private EditText etBuscador;
     private String farmaciaId;
+    private JSONArray listaOriginalMedicamentos = new JSONArray();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,7 +33,8 @@ public class AdminHomeActivity extends AppCompatActivity {
 
         tvNombreFarmacia = findViewById(R.id.tvAdminNombreFarmacia);
         tvSinMedicamentos = findViewById(R.id.tvAdminSinMedicamentos);
-        containerMedicamentos = findViewById(R.id.containerMedicamentosAdmin); // Debo añadir este ID al XML o usar el rv
+        containerMedicamentos = findViewById(R.id.containerMedicamentosAdmin);
+        etBuscador = findViewById(R.id.etAdminBuscadorMedicamento);
         
         SharedPreferences prefs = getSharedPreferences("AdminPrefs", MODE_PRIVATE);
         farmaciaId = prefs.getString("farmaciaId", "");
@@ -40,6 +48,42 @@ public class AdminHomeActivity extends AppCompatActivity {
         findViewById(R.id.ivAdminProfile).setOnClickListener(v -> {
             startActivity(new Intent(this, AdminPerfilActivity.class));
         });
+
+        findViewById(R.id.ivAdminFactura).setOnClickListener(v -> {
+            startActivity(new Intent(this, AdminFacturacionActivity.class));
+        });
+
+        configurarBuscador();
+    }
+
+    private void configurarBuscador() {
+        if (etBuscador != null) {
+            etBuscador.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                @Override public void afterTextChanged(Editable s) {
+                    filtrarMedicamentos(s.toString().trim());
+                }
+            });
+        }
+    }
+
+    private void filtrarMedicamentos(String query) {
+        containerMedicamentos.removeAllViews();
+        if (query.isEmpty()) {
+            mostrarMedicamentos(listaOriginalMedicamentos);
+        } else {
+            JSONArray filtrados = new JSONArray();
+            for (int i = 0; i < listaOriginalMedicamentos.length(); i++) {
+                try {
+                    JSONObject med = listaOriginalMedicamentos.getJSONObject(i);
+                    if (med.getString("nombre").toLowerCase().contains(query.toLowerCase())) {
+                        filtrados.put(med);
+                    }
+                } catch (Exception e) {}
+            }
+            mostrarMedicamentos(filtrados);
+        }
     }
 
     @Override
@@ -63,19 +107,13 @@ public class AdminHomeActivity extends AppCompatActivity {
                 
                 JSONObject resJson = new JSONObject(res);
                 if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
+                    listaOriginalMedicamentos = resJson.getJSONArray("docs");
                     runOnUiThread(() -> {
-                        containerMedicamentos.removeAllViews();
-                        if (docs.length() == 0) {
-                            tvSinMedicamentos.setVisibility(View.VISIBLE);
+                        String busqueda = etBuscador != null ? etBuscador.getText().toString() : "";
+                        if (busqueda.isEmpty()) {
+                            mostrarMedicamentos(listaOriginalMedicamentos);
                         } else {
-                            tvSinMedicamentos.setVisibility(View.GONE);
-                            for (int i = 0; i < docs.length(); i++) {
-                                try {
-                                    JSONObject med = docs.getJSONObject(i);
-                                    agregarCardMedicamento(med);
-                                } catch (Exception e) {}
-                            }
+                            filtrarMedicamentos(busqueda);
                         }
                     });
                 }
@@ -85,17 +123,40 @@ public class AdminHomeActivity extends AppCompatActivity {
         }).start();
     }
 
-    private void agregarCardMedicamento(JSONObject med) throws Exception {
-        View view = getLayoutInflater().inflate(android.R.layout.simple_list_item_2, null);
-        TextView text1 = view.findViewById(android.R.id.text1);
-        TextView text2 = view.findViewById(android.R.id.text2);
+    private void mostrarMedicamentos(JSONArray docs) {
+        containerMedicamentos.removeAllViews();
+        if (docs.length() == 0) {
+            tvSinMedicamentos.setVisibility(View.VISIBLE);
+        } else {
+            tvSinMedicamentos.setVisibility(View.GONE);
+            for (int i = 0; i < docs.length(); i++) {
+                try {
+                    JSONObject med = docs.getJSONObject(i);
+                    agregarCardMedicamento(med);
+                } catch (Exception e) {}
+            }
+        }
+    }
 
-        String nombre = med.getString("nombre");
-        String precio = med.getString("precio");
-        String stock = med.optString("stock", "0");
+    private void agregarCardMedicamento(JSONObject med) throws Exception {
+        View view = getLayoutInflater().inflate(R.layout.item_medicamento_admin, containerMedicamentos, false);
         
-        text1.setText(nombre + " - $" + precio);
-        text2.setText("Existencias: " + stock + " | " + med.optString("presentacion", ""));
+        TextView tvNombre = view.findViewById(R.id.tvAdminMedItemNombre);
+        TextView tvPresentacion = view.findViewById(R.id.tvAdminMedItemPresentacion);
+        TextView tvStock = view.findViewById(R.id.tvAdminMedItemStock);
+        ImageView ivFoto = view.findViewById(R.id.ivAdminMedItemFoto);
+
+        tvNombre.setText(med.getString("nombre"));
+        tvPresentacion.setText(med.optString("presentacion", "Sin presentación"));
+        tvStock.setText(med.optString("stock", "0"));
+        
+        String foto1 = med.optString("foto1", "");
+        if (!foto1.isEmpty()) {
+            Utilidades.cargarImagenBase64(foto1, ivFoto);
+        } else {
+            ivFoto.setImageResource(android.R.drawable.ic_menu_camera);
+            ivFoto.setColorFilter(ContextCompat.getColor(this, R.color.azul_suave));
+        }
         
         view.setOnClickListener(v -> {
             Intent intent = new Intent(this, AdminMedicamentoActivity.class);
