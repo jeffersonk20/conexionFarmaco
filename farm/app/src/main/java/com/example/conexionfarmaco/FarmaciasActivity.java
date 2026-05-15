@@ -1,12 +1,14 @@
 package com.example.conexionfarmaco;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -55,6 +57,16 @@ public class FarmaciasActivity extends AppCompatActivity {
         }).start();
     }
 
+    private void realizarLlamada(String telefono) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_DIAL);
+            intent.setData(Uri.parse("tel:" + telefono));
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "No se pudo abrir el marcador", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void mostrarFarmacias(JSONArray docs) {
         containerFarmacias.removeAllViews();
         for (int i = 0; i < docs.length(); i++) {
@@ -70,9 +82,19 @@ public class FarmaciasActivity extends AppCompatActivity {
         TextView tvNombre = card.findViewById(R.id.tvItemFarmaciaNombre);
         TextView tvDesc = card.findViewById(R.id.tvItemFarmaciaDesc);
         ImageView ivLogo = card.findViewById(R.id.ivItemFarmaciaLogo);
+        View btnLlamar = card.findViewById(R.id.btnLlamarFarmacia);
         
         tvNombre.setText(farmacia.getString("empresa"));
         tvDesc.setText(farmacia.optString("descripcion", "Sin descripción disponible"));
+
+        String telefono = farmacia.optString("telefono", "");
+        if (btnLlamar != null) {
+            if (!telefono.isEmpty()) {
+                btnLlamar.setOnClickListener(v -> realizarLlamada(telefono));
+            } else {
+                btnLlamar.setVisibility(View.GONE);
+            }
+        }
 
         String fotoPath = farmacia.optString("foto", "");
         if (!fotoPath.isEmpty() && ivLogo != null) {

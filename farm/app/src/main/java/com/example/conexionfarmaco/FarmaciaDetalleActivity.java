@@ -1,5 +1,7 @@
 package com.example.conexionfarmaco;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -8,6 +10,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -35,9 +38,27 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
                 farmaciaId = farmacia.getString("_id");
                 tvNombre.setText(farmacia.getString("empresa"));
                 tvDesc.setText(farmacia.optString("descripcion", ""));
-                
+
+                String telefono = farmacia.optString("telefono", "");
+                FloatingActionButton fab = findViewById(R.id.fabLlamar);
+                if (!telefono.isEmpty()) {
+                    fab.setOnClickListener(v -> realizarLlamada(telefono));
+                } else {
+                    fab.setVisibility(View.GONE);
+                }
+
                 cargarMedicamentos();
             } catch (Exception e) {}
+        }
+    }
+
+    private void realizarLlamada(String telefono) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_DIAL);
+            intent.setData(Uri.parse("tel:" + telefono));
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "No se pudo abrir el marcador", Toast.LENGTH_SHORT).show();
         }
     }
 
