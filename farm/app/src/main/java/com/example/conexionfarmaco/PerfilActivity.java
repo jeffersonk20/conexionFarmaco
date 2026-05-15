@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -88,20 +89,86 @@ public class PerfilActivity extends AppCompatActivity {
     }
 
     private void cargarHistorial() {
-        // Por ahora simularemos que no hay compras, 
-        // pero aquí es donde se conectaría a una base de datos de 'ventas' o 'pedidos'
-        if (tvSinCompras != null) {
-            tvSinCompras.setVisibility(View.VISIBLE);
-            tvSinCompras.setText("Buscando tus últimas compras...");
-            
-            // Simular carga exitosa (pero vacía por ahora)
-            new android.os.Handler().postDelayed(() -> {
-                if (tvSinCompras != null) {
-                    tvSinCompras.setText("No tienes compras registradas recientemente");
+        if (tvSinCompras == null || containerHistorial == null) return;
+        
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        String savedData = prefs.getString("userData", "");
+        if (savedData.isEmpty()) return;
+
+        try {
+            JSONObject user = new JSONObject(savedData);
+            String userEmail = user.optString("correo", "");
+            if (userEmail.isEmpty()) return;
+
+            new Thread(() -> {
+                try {
+                    DBHelper db = new DBHelper(this);
+                    List<JSONObject> pedidos;
+
+                    if (Utilidades.hayInternet(this)) {
+                        JSONObject selector = new JSONObject();
+                        selector.put("selector", new JSONObject().put("cliente_correo", userEmail));
+                        
+                        TareaServidor tarea = new TareaServidor();
+                        String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
+                        JSONObject resJson = new JSONObject(res);
+                        
+                        if (resJson.has("docs")) {
+                            JSONArray docs = resJson.getJSONArray("docs");
+                            for (int i = 0; i < docs.length(); i++) {
+                                db.guardarPedidoLocal(docs.getJSONObject(i));
+                            }
+                        }
+                    }
+
+                    // Cargar de la base de datos local (que ya incluye lo que acabamos de bajar o lo que estaba offline)
+                    pedidos = db.obtenerPedidosCache(userEmail);
+
+                    runOnUiThread(() -> {
+                        containerHistorial.removeAllViews();
+                        if (pedidos.isEmpty()) {
+                            tvSinCompras.setVisibility(View.VISIBLE);
+                            tvSinCompras.setText("No tienes compras registradas");
+                        } else {
+                            tvSinCompras.setVisibility(View.GONE);
+                            for (JSONObject pedido : pedidos) {
+                                agregarItemHistorialResumido(pedido);
+                            }
+                        }
+                    });
+
+                } catch (Exception e) {
+                    Log.e("Perfil", "Error historial", e);
                 }
-            }, 2000);
-        }
+            }).start();
+
+        } catch (Exception e) {}
     }
+
+    private void agregarItemHistorialResumido(JSONObject pedido) {
+        try {
+            View view = getLayoutInflater().inflate(android.R.layout.simple_list_item_2, containerHistorial, false);
+            TextView text1 = view.findViewById(android.R.id.text1);
+            TextView text2 = view.findViewById(android.R.id.text2);
+
+            String fecha = pedido.optString("fecha", "Sin fecha");
+            String estado = pedido.optString("estado", "Pendiente");
+            JSONArray items = pedido.getJSONArray("items");
+            
+            text1.setText("Pedido del " + fecha);
+            text1.setTextColor(getResources().getColor(R.color.azul_primario));
+            
+            text2.setText(items.length() + " productos - Estado: " + estado);
+            
+            view.setPadding(0, 20, 0, 20);
+            view.setOnClickListener(v -> {
+                startActivity(new Intent(this, HistorialPedidosActivity.class));
+            });
+
+            containerHistorial.addView(view);
+        } catch (Exception e) {}
+    }
+
 
     private void mostrarDialogoEditar() {
         if (userData == null) return;
@@ -213,20 +280,44 @@ public class PerfilActivity extends AppCompatActivity {
             String id = userData.optString("_id", "");
             String urlUpdate = Utilidades.url_mto + "/" + id;
             
-            TareaServidor tarea = new TareaServidor();
-            String res = tarea.execute(userData.toString(), "PUT", urlUpdate).get();
-            
-            JSONObject resJson = new JSONObject(res);
-            if (resJson.optBoolean("ok", false)) {
-                userData.put("_rev", resJson.getString("rev"));
-                getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
-                        .putString("userData", userData.toString()).apply();
-                
-                runOnUiThread(() -> {
-                    actualizarUI(userData.toString());
-                    Toast.makeText(this, "Datos actualizados", Toast.LENGTH_SHORT).show();
-                });
+            DBHelper dbHelper = new DBHelper(this);
+            // Actualizar localmente siempre para que persista offline
+            dbHelper.administrarUsuarios("modificar", new String[]{
+                    id,
+                    userData.optString("nombres"),
+                    userData.optString("apellidos"),
+                    userData.optString("telefono"),
+                    userData.optString("correo"),
+                    userData.optString("clave"), // Necesitamos mantener la clave
+                    userData.optString("direccion"),
+                    userData.optString("alergias"),
+                    userData.optString("tipo_sangre"),
+                    userData.optString("enfermedades"),
+                    userData.optString("foto")
+            });
+
+            // Guardar en Prefs para el UI inmediato
+            getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                    .putString("userData", userData.toString()).apply();
+
+            if (Utilidades.hayInternet(this)) {
+                TareaServidor tarea = new TareaServidor();
+                String res = tarea.execute(userData.toString(), "PUT", urlUpdate).get();
+                JSONObject resJson = new JSONObject(res);
+                if (resJson.optBoolean("ok", false)) {
+                    userData.put("_rev", resJson.getString("rev"));
+                    getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                            .putString("userData", userData.toString()).apply();
+                } else {
+                    dbHelper.agregarPendiente(urlUpdate, "PUT", userData.toString(), "couchdb");
+                }
+            } else {
+                dbHelper.agregarPendiente(urlUpdate, "PUT", userData.toString(), "couchdb");
+                runOnUiThread(() -> Toast.makeText(this, "Cambios guardados localmente", Toast.LENGTH_SHORT).show());
             }
+
+            runOnUiThread(() -> actualizarUI(userData.toString()));
+            
         } catch (Exception e) {
             Log.e("Perfil", "Error sync", e);
         }
@@ -237,46 +328,60 @@ public class PerfilActivity extends AppCompatActivity {
         String savedData = prefs.getString("userData", "");
         
         if (!savedData.isEmpty()) {
-            actualizarUI(savedData);
+            try {
+                userData = new JSONObject(savedData);
+                actualizarUI(savedData);
+            } catch (Exception e) {}
         }
 
-        try {
-            String correoABuscar = "";
-            if (!savedData.isEmpty()) {
-                correoABuscar = new JSONObject(savedData).optString("correo", "");
-            }
+        if (Utilidades.hayInternet(this)) {
+            new Thread(() -> {
+                try {
+                    String correo = userData != null ? userData.optString("correo", "") : "";
+                    if (correo.isEmpty()) return;
 
-            if (!correoABuscar.isEmpty()) {
-                final String correo = correoABuscar;
-                new Thread(() -> {
-                    try {
-                        JSONObject selector = new JSONObject();
-                        JSONObject query = new JSONObject();
-                        query.put("correo", correo);
-                        selector.put("selector", query);
-                        
-                        TareaServidor tarea = new TareaServidor();
-                        String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
-                        
-                        JSONObject resJson = new JSONObject(respuesta);
-                        if (resJson.has("docs")) {
-                            JSONArray docs = resJson.getJSONArray("docs");
-                            if (docs.length() > 0) {
-                                userData = docs.getJSONObject(0);
-                                String actualizado = userData.toString();
-                                prefs.edit().putString("userData", actualizado).apply();
-                                runOnUiThread(() -> actualizarUI(actualizado));
-                            }
+                    JSONObject selector = new JSONObject();
+                    JSONObject query = new JSONObject();
+                    query.put("correo", correo);
+                    selector.put("selector", query);
+                    
+                    TareaServidor tarea = new TareaServidor();
+                    String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
+                    
+                    JSONObject resJson = new JSONObject(respuesta);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        if (docs.length() > 0) {
+                            userData = docs.getJSONObject(0);
+                            String actualizado = userData.toString();
+                            prefs.edit().putString("userData", actualizado).apply();
+                            
+                            // Sincronizar también con la DB local lo que venga de la nube
+                            DBHelper db = new DBHelper(this);
+                            db.administrarUsuarios("modificar", new String[]{
+                                    userData.getString("_id"),
+                                    userData.getString("nombres"),
+                                    userData.getString("apellidos"),
+                                    userData.getString("telefono"),
+                                    userData.getString("correo"),
+                                    userData.optString("clave", ""),
+                                    userData.optString("direccion", ""),
+                                    userData.optString("alergias", ""),
+                                    userData.optString("tipo_sangre", ""),
+                                    userData.optString("enfermedades", ""),
+                                    userData.optString("foto", "")
+                            });
+
+                            runOnUiThread(() -> actualizarUI(actualizado));
                         }
-                    } catch (Exception e) {
-                        Log.e("Perfil", "Error red", e);
                     }
-                }).start();
-            }
-        } catch (Exception e) {
-            Log.e("Perfil", "Error parse", e);
+                } catch (Exception e) {
+                    Log.e("Perfil", "Error red", e);
+                }
+            }).start();
         }
     }
+
 
     private void actualizarUI(String jsonStr) {
         try {
@@ -411,32 +516,19 @@ public class PerfilActivity extends AppCompatActivity {
     }
 
     private void subirFoto() {
-        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        String savedData = prefs.getString("userData", "");
-        if (savedData.isEmpty()) return;
-
+        if (userData == null) return;
+        
         new Thread(() -> {
             try {
-                JSONObject json = new JSONObject(savedData);
-                json.put("foto", urlFoto);
-                String id = json.optString("_id", "");
-                if (id.isEmpty()) return;
-
-                String urlUpdate = Utilidades.url_mto + "/" + id;
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(json.toString(), "PUT", urlUpdate).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.optBoolean("ok", false)) {
-                    json.put("_rev", resJson.getString("rev"));
-                    prefs.edit().putString("userData", json.toString()).apply();
-                    runOnUiThread(() -> Toast.makeText(this, "Perfil actualizado", Toast.LENGTH_SHORT).show());
-                }
+                userData.put("foto", urlFoto);
+                actualizarDocumentoEnCouch();
+                runOnUiThread(() -> Toast.makeText(this, "Foto de perfil actualizada", Toast.LENGTH_SHORT).show());
             } catch (Exception e) {
                 Log.e("Perfil", "Error subida", e);
             }
         }).start();
     }
+
 
     private void cerrarSesion() {
         getSharedPreferences("UserPrefs", MODE_PRIVATE).edit().clear().apply();

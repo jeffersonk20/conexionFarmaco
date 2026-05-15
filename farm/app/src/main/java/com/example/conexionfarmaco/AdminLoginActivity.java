@@ -39,6 +39,11 @@ public class AdminLoginActivity extends AppCompatActivity {
             return;
         }
 
+        if (!Utilidades.hayInternet(this)) {
+            loginLocal(cor, cla);
+            return;
+        }
+
         new Thread(() -> {
             try {
                 JSONObject selector = new JSONObject();
@@ -57,31 +62,79 @@ public class AdminLoginActivity extends AppCompatActivity {
                     JSONArray docs = resJson.getJSONArray("docs");
                     if (docs.length() > 0) {
                         JSONObject farmDoc = docs.getJSONObject(0);
-                        String id = farmDoc.getString("_id");
-                        String nombre = farmDoc.getString("empresa");
-
-                        // Guardar sesión admin
-                        SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
-                        editor.putString("farmaciaId", id);
-                        editor.putString("farmaciaNombre", nombre);
-                        editor.apply();
-
-                        runOnUiThread(() -> {
-                            Toast.makeText(this, "Bienvenido " + nombre, Toast.LENGTH_SHORT).show();
-                            startActivity(new Intent(this, AdminHomeActivity.class));
-                            finish();
-                        });
+                        entrar(farmDoc, true); // true = guardar en local
                     } else {
-                        runOnUiThread(() -> Toast.makeText(this, "Credenciales incorrectas", Toast.LENGTH_SHORT).show());
+                        loginLocal(cor, cla);
                     }
                 } else {
-                    runOnUiThread(() -> Toast.makeText(this, "Error del servidor", Toast.LENGTH_SHORT).show());
+                    loginLocal(cor, cla);
                 }
 
             } catch (Exception e) {
-                Log.e("AdminLogin", "Error", e);
-                runOnUiThread(() -> Toast.makeText(this, "Error de conexión", Toast.LENGTH_SHORT).show());
+                loginLocal(cor, cla);
             }
         }).start();
     }
+
+    private void loginLocal(String cor, String cla) {
+        DBHelper db = new DBHelper(this);
+        android.database.Cursor cursor = db.loginFarmacia(cor, cla);
+        if (cursor.moveToFirst()) {
+            try {
+                JSONObject farmDoc = new JSONObject();
+                farmDoc.put("_id", cursor.getString(0));
+                farmDoc.put("empresa", cursor.getString(1));
+                farmDoc.put("direccion", cursor.getString(2));
+                farmDoc.put("telefono", cursor.getString(3));
+                farmDoc.put("correo", cursor.getString(4));
+                farmDoc.put("clave", cursor.getString(5));
+                farmDoc.put("foto", cursor.getString(6));
+                farmDoc.put("descripcion", cursor.getString(7));
+                entrar(farmDoc, false); // false = no re-guardar en DB
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Error local: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        } else {
+            runOnUiThread(() -> Toast.makeText(this, "Credenciales incorrectas o sin registro local", Toast.LENGTH_SHORT).show());
+        }
+        cursor.close();
+    }
+
+    private void entrar(JSONObject farmDoc, boolean guardarEnLocal) throws Exception {
+        String id = farmDoc.getString("_id");
+        String nombre = farmDoc.getString("empresa");
+
+        // Guardar sesión admin en Preferences
+        SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
+        editor.putString("farmaciaId", id);
+        editor.putString("farmaciaNombre", nombre);
+        editor.apply();
+
+        if (guardarEnLocal) {
+            DBHelper db = new DBHelper(this);
+            String clave = farmDoc.optString("clave", etPass.getText().toString());
+            
+            // Usar INSERT OR REPLACE para asegurar que tenemos el perfil completo
+            db.getWritableDatabase().execSQL("INSERT OR REPLACE INTO farmacias(id, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?)",
+                    new String[]{
+                            id, 
+                            nombre, 
+                            farmDoc.optString("direccion", ""), 
+                            farmDoc.optString("telefono", ""), 
+                            farmDoc.optString("correo", ""), 
+                            clave, 
+                            farmDoc.optString("foto", ""), 
+                            farmDoc.optString("descripcion", "")
+                    });
+        }
+
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Bienvenido " + nombre, Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, AdminHomeActivity.class));
+            finish();
+        });
+    }
+
+
+
 }

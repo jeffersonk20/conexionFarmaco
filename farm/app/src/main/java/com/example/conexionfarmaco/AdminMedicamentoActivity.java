@@ -114,12 +114,18 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 if (requestCode == PICK_IMAGE_1) {
                     base64Foto1 = base64;
                     ivFoto1.setImageBitmap(bitmap);
+                    ivFoto1.setColorFilter(null);
+                    ivFoto1.setPadding(0,0,0,0);
                 } else if (requestCode == PICK_IMAGE_2) {
                     base64Foto2 = base64;
                     ivFoto2.setImageBitmap(bitmap);
+                    ivFoto2.setColorFilter(null);
+                    ivFoto2.setPadding(0,0,0,0);
                 } else if (requestCode == PICK_IMAGE_3) {
                     base64Foto3 = base64;
                     ivFoto3.setImageBitmap(bitmap);
+                    ivFoto3.setColorFilter(null);
+                    ivFoto3.setPadding(0,0,0,0);
                 }
             } catch (Exception e) {
                 Log.e("AdminMed", "Error procesando imagen", e);
@@ -189,24 +195,42 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 json.put("foto2", base64Foto2);
                 json.put("foto3", base64Foto3);
 
-                TareaServidor tarea = new TareaServidor();
                 String metodo = medEdicion != null ? "PUT" : "POST";
-                String url = medEdicion != null ? Utilidades.url_medicamentos + "/" + json.getString("_id") : Utilidades.url_medicamentos;
+                String url = (medEdicion != null) ? 
+                        Utilidades.url_medicamentos + "/" + json.getString("_id") : 
+                        Utilidades.url_medicamentos;
+
+                DBHelper dbHelper = new DBHelper(this);
+                // Guardar localmente siempre
+                dbHelper.guardarMedicamentoLocal(json);
                 
-                String res = tarea.execute(json.toString(), metodo, url).get();
-                JSONObject resJson = new JSONObject(res);
-                
-                if (resJson.optBoolean("ok", false)) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, "Guardado correctamente", Toast.LENGTH_SHORT).show();
-                        finish();
-                    });
+                if (Utilidades.hayInternet(this)) {
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(json.toString(), metodo, url).get();
+                    JSONObject resJson = new JSONObject(res);
+                    
+                    if (resJson.optBoolean("ok", false)) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Guardado correctamente", Toast.LENGTH_SHORT).show();
+                            finish();
+                        });
+                        return;
+                    }
                 }
+
+                // Si no hay internet o falló el servidor, ya está en SQLite, solo agregar a pendientes
+                dbHelper.agregarPendiente(url, metodo, json.toString(), "couchdb");
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Guardado localmente. Se sincronizará luego.", Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+
             } catch (Exception e) {
                 Log.e("AdminMed", "Error guardado", e);
             }
         }).start();
     }
+
 
     private void eliminarMedicamento() {
         if (medEdicion == null) return;

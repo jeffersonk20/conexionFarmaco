@@ -176,24 +176,38 @@ public class AdminRegistroActivity extends AppCompatActivity {
                 json.put("foto", urlFoto);
                 json.put("tipo", "farmacia");
 
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(json.toString(), "POST", Utilidades.url_farmacias).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.optBoolean("ok", false)) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, "Farmacia registrada con éxito. Inicia Sesión.", Toast.LENGTH_LONG).show();
-                        startActivity(new Intent(this, AdminLoginActivity.class));
-                        finish();
-                    });
-                } else {
-                    runOnUiThread(() -> Toast.makeText(this, "Error: " + res, Toast.LENGTH_LONG).show());
+                DBHelper dbHelper = new DBHelper(this);
+                // Guardar localmente con TODOS los campos para login offline y visualización en perfil
+                dbHelper.administrarFarmacias("nuevo", new String[]{id, emp, dir, tel, cor, cla, urlFoto, des});
+
+                if (Utilidades.hayInternet(this)) {
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(json.toString(), "POST", Utilidades.url_farmacias).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.optBoolean("ok", false)) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Farmacia registrada con éxito. Inicia Sesión.", Toast.LENGTH_LONG).show();
+                            startActivity(new Intent(this, AdminLoginActivity.class));
+                            finish();
+                        });
+                        return;
+                    }
                 }
+
+                // Si no hay internet o falló el server
+                dbHelper.agregarPendiente(Utilidades.url_farmacias, "POST", json.toString(), "couchdb");
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Registro guardado localmente. Se sincronizará luego.", Toast.LENGTH_LONG).show();
+                    startActivity(new Intent(this, AdminLoginActivity.class));
+                    finish();
+                });
+
             } catch (Exception e) {
                 Log.e("AdminRegistro", "Error reg", e);
             }
         }).start();
     }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {

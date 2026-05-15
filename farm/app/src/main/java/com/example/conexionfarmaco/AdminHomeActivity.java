@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
 
 public class AdminHomeActivity extends AppCompatActivity {
 
@@ -89,6 +90,7 @@ public class AdminHomeActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        Utilidades.sincronizar(this);
         cargarMedicamentos();
     }
 
@@ -97,31 +99,48 @@ public class AdminHomeActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
-                JSONObject selector = new JSONObject();
-                JSONObject query = new JSONObject();
-                query.put("id_farmacia", farmaciaId);
-                selector.put("selector", query);
-
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    listaOriginalMedicamentos = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        String busqueda = etBuscador != null ? etBuscador.getText().toString() : "";
-                        if (busqueda.isEmpty()) {
-                            mostrarMedicamentos(listaOriginalMedicamentos);
-                        } else {
-                            filtrarMedicamentos(busqueda);
-                        }
-                    });
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("id_farmacia", farmaciaId));
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        listaOriginalMedicamentos = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < listaOriginalMedicamentos.length(); i++) 
+                            db.guardarMedicamentoLocal(listaOriginalMedicamentos.getJSONObject(i));
+                        
+                        actualizarListaAdmin();
+                        return;
+                    }
                 }
+                // Cache si offline
+                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(null, false);
+                // Filtrar solo los de esta farmacia si el cache es general
+                listaOriginalMedicamentos = new JSONArray();
+                for (JSONObject m : cache) {
+                    if (m.optString("id_farmacia").equals(farmaciaId)) listaOriginalMedicamentos.put(m);
+                }
+                actualizarListaAdmin();
+
             } catch (Exception e) {
                 Log.e("AdminHome", "Error carga", e);
             }
         }).start();
     }
+
+    private void actualizarListaAdmin() {
+        runOnUiThread(() -> {
+            String busqueda = etBuscador != null ? etBuscador.getText().toString() : "";
+            if (busqueda.isEmpty()) {
+                mostrarMedicamentos(listaOriginalMedicamentos);
+            } else {
+                filtrarMedicamentos(busqueda);
+            }
+        });
+    }
+
 
     private void mostrarMedicamentos(JSONArray docs) {
         containerMedicamentos.removeAllViews();

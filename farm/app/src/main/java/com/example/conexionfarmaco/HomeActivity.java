@@ -71,6 +71,9 @@ public class HomeActivity extends AppCompatActivity {
         cargarPromociones();
         cargarRecomendaciones();
 
+        // Intentar sincronizar datos pendientes
+        Utilidades.sincronizar(this);
+
         // Configurar buscador
         if (etBuscador != null) {
             etBuscador.addTextChangedListener(new android.text.TextWatcher() {
@@ -128,29 +131,39 @@ public class HomeActivity extends AppCompatActivity {
     private void cargarPromociones() {
         new Thread(() -> {
             try {
-                JSONObject selector = new JSONObject();
-                selector.put("selector", new JSONObject().put("promocion", true));
-                
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerPromociones.removeAllViews();
-                        for (int i = 0; i < docs.length(); i++) {
-                            try {
-                                containerPromociones.addView(crearCardMedicamento(docs.getJSONObject(i)));
-                            } catch (Exception e) {}
-                        }
-                    });
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("promocion", true));
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < docs.length(); i++) db.guardarMedicamentoCache(docs.getJSONObject(i));
+                        
+                        runOnUiThread(() -> mostrarListaMedicamentos(docs, containerPromociones));
+                        return;
+                    }
                 }
+                // Si no hay internet o falló el server, usar caché
+                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(null, true);
+                runOnUiThread(() -> mostrarListaMedicamentos(new JSONArray(cache), containerPromociones));
             } catch (Exception e) {
                 Log.e("HomeAct", "Error promos", e);
             }
         }).start();
     }
+
+    private void mostrarListaMedicamentos(JSONArray docs, LinearLayout container) {
+        container.removeAllViews();
+        for (int i = 0; i < docs.length(); i++) {
+            try {
+                container.addView(crearCardMedicamento(docs.getJSONObject(i)));
+            } catch (Exception e) {}
+        }
+    }
+
 
     private void cargarRecomendaciones() {
         if (userEnfermedades.equalsIgnoreCase("Ninguna") && userAlergias.isEmpty()) {
@@ -229,39 +242,46 @@ public class HomeActivity extends AppCompatActivity {
     private void buscarMedicamentos(String query) {
         new Thread(() -> {
             try {
-                JSONObject selector = new JSONObject();
-                JSONObject regex = new JSONObject();
-                regex.put("$regex", "(?i)" + query);
-                selector.put("selector", new JSONObject().put("nombre", regex));
-
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerBusqueda.removeAllViews();
-                        if (docs.length() == 0) {
-                            TextView tv = new TextView(this);
-                            tv.setText("No se encontraron medicamentos");
-                            tv.setPadding(20, 50, 20, 20);
-                            tv.setGravity(android.view.Gravity.CENTER);
-                            containerBusqueda.addView(tv);
-                        } else {
-                            for (int i = 0; i < docs.length(); i++) {
-                                try {
-                                    containerBusqueda.addView(crearCardMedicamento(docs.getJSONObject(i)));
-                                } catch (Exception e) {}
-                            }
-                        }
-                    });
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("nombre", new JSONObject().put("$regex", "(?i)" + query)));
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < docs.length(); i++) db.guardarMedicamentoCache(docs.getJSONObject(i));
+                        runOnUiThread(() -> mostrarResultadosBusqueda(docs));
+                        return;
+                    }
                 }
+                // Cache si offline
+                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(query, false);
+                runOnUiThread(() -> mostrarResultadosBusqueda(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("HomeAct", "Error busqueda", e);
             }
         }).start();
     }
+
+    private void mostrarResultadosBusqueda(JSONArray docs) {
+        containerBusqueda.removeAllViews();
+        if (docs.length() == 0) {
+            TextView tv = new TextView(this);
+            tv.setText("No se encontraron resultados");
+            tv.setPadding(20, 50, 20, 20);
+            tv.setGravity(android.view.Gravity.CENTER);
+            containerBusqueda.addView(tv);
+        } else {
+            for (int i = 0; i < docs.length(); i++) {
+                try {
+                    containerBusqueda.addView(crearCardMedicamento(docs.getJSONObject(i)));
+                } catch (Exception e) {}
+            }
+        }
+    }
+
 
     private View crearCardMedicamento(JSONObject med) throws Exception {
         View card = getLayoutInflater().inflate(R.layout.item_medicamento_cliente, null);

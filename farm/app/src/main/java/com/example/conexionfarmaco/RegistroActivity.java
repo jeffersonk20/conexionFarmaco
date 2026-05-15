@@ -219,19 +219,50 @@ public class RegistroActivity extends AppCompatActivity {
             json.put("alergias", ale);
             json.put("tipo_sangre", san);
             json.put("enfermedades", enf);
+            json.put("tipo", "usuario");
 
-            TareaServidor tarea = new TareaServidor();
-            String resServer = tarea.execute(json.toString(), "POST", Utilidades.url_mto).get();
-            
-            JSONObject resJson = new JSONObject(resServer);
-            if (resJson.has("ok") && resJson.getBoolean("ok")) {
-                mostrar("¡Registro exitoso!");
-                new MailManager(cor, nom).execute();
-                startActivity(new Intent(this, LoginActivity.class));
-                finish();
+            DBHelper dbHelper = new DBHelper(this);
+            // Guardar localmente con TODOS los campos para que funcionen offline
+            dbHelper.administrarUsuarios("nuevo", new String[]{id, nom, ape, tel, cor, cla, dir, ale, san, enf, urlFoto});
+
+            if (Utilidades.hayInternet(this)) {
+                new Thread(() -> {
+                    try {
+                        TareaServidor tarea = new TareaServidor();
+                        String resServer = tarea.execute(json.toString(), "POST", Utilidades.url_mto).get();
+                        JSONObject resJson = new JSONObject(resServer);
+                        if (resJson.optBoolean("ok", false)) {
+                            new MailManager(cor, nom).execute();
+                        } else {
+                            // Si falló el servidor pero hay internet, guardar como pendiente
+                            dbHelper.agregarPendiente(Utilidades.url_mto, "POST", json.toString(), "couchdb");
+                            JSONObject emailData = new JSONObject();
+                            emailData.put("destinatario", cor);
+                            emailData.put("asunto", "🏥 ¡Bienvenido/a a Conexión Fármaco!");
+                            emailData.put("contenido", "Bienvenido " + nom);
+                            dbHelper.agregarPendiente("", "", emailData.toString(), "email");
+                        }
+                    } catch (Exception e) {
+                        dbHelper.agregarPendiente(Utilidades.url_mto, "POST", json.toString(), "couchdb");
+                    }
+                }).start();
             } else {
-                mostrar("Error al guardar en la nube: " + resServer);
+                // No hay internet, guardar ambos como pendientes
+                dbHelper.agregarPendiente(Utilidades.url_mto, "POST", json.toString(), "couchdb");
+                
+                JSONObject emailData = new JSONObject();
+                emailData.put("destinatario", cor);
+                emailData.put("asunto", "🏥 ¡Bienvenido/a a Conexión Fármaco!");
+                emailData.put("contenido", "Bienvenido " + nom);
+                dbHelper.agregarPendiente("", "", emailData.toString(), "email");
+                
+                mostrar("Registro guardado localmente. Se sincronizará al conectar a internet.");
             }
+
+            mostrar("¡Registro exitoso!");
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+
         } catch (Exception e) {
             mostrar("Error de conexión: " + e.getMessage());
         }

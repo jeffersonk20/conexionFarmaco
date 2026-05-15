@@ -11,6 +11,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
 
 public class HistorialPedidosActivity extends AppCompatActivity {
 
@@ -41,31 +42,38 @@ public class HistorialPedidosActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
-                JSONObject selector = new JSONObject();
-                JSONObject query = new JSONObject();
-                query.put("cliente_correo", userEmail);
-                selector.put("selector", query);
-
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerHistorial.removeAllViews();
-                        for (int i = 0; i < docs.length(); i++) {
-                            try {
-                                agregarCardHistorial(docs.getJSONObject(i));
-                            } catch (Exception e) {}
-                        }
-                    });
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("cliente_correo", userEmail));
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < docs.length(); i++) db.guardarPedidoLocal(docs.getJSONObject(i));
+                        runOnUiThread(() -> mostrarHistorial(docs));
+                        return;
+                    }
                 }
+                // Cache si offline
+                List<JSONObject> cache = new DBHelper(this).obtenerPedidosCache(userEmail);
+                runOnUiThread(() -> mostrarHistorial(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("Historial", "Error carga", e);
             }
         }).start();
     }
+
+    private void mostrarHistorial(JSONArray docs) {
+        containerHistorial.removeAllViews();
+        for (int i = 0; i < docs.length(); i++) {
+            try {
+                agregarCardHistorial(docs.getJSONObject(i));
+            } catch (Exception e) {}
+        }
+    }
+
 
     private void agregarCardHistorial(JSONObject pedido) throws Exception {
         View card = getLayoutInflater().inflate(R.layout.item_historial_cliente, containerHistorial, false);

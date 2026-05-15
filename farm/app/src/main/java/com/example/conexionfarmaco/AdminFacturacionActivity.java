@@ -69,47 +69,103 @@ public class AdminFacturacionActivity extends AppCompatActivity {
     }
 
     private void cargarPedidos() {
+        String farmaciaId = getSharedPreferences("AdminPrefs", MODE_PRIVATE).getString("farmaciaId", "");
+        if (farmaciaId.isEmpty()) return;
+
         new Thread(() -> {
             try {
-                JSONObject selector = new JSONObject();
-                selector.put("selector", new JSONObject()); 
+                DBHelper db = new DBHelper(this);
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    JSONObject query = new JSONObject();
+                    // Solo traer pedidos que involucren a ESTA farmacia
+                    query.put("farmacias_ids", new JSONObject().put("$elemMatch", new JSONObject().put("$eq", farmaciaId)));
+                    selector.put("selector", query);
 
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
-                Log.d("AdminFact", "Respuesta pedidos: " + res);
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerReservas.removeAllViews();
-                        containerPagosOnline.removeAllViews();
-                        
-                        if (docs.length() == 0) {
-                            Toast.makeText(this, "No hay pedidos registrados", Toast.LENGTH_SHORT).show();
-                        }
-
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
+                    
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
                         for (int i = 0; i < docs.length(); i++) {
-                            try {
-                                JSONObject pedido = docs.getJSONObject(i);
-                                String tipo = pedido.optString("tipo", "");
-                                if (tipo.equals("reserva")) {
-                                    agregarCardPedido(pedido, containerReservas);
-                                } else {
-                                    agregarCardPedido(pedido, containerPagosOnline);
-                                }
-                            } catch (Exception e) {}
+                            db.guardarPedidoLocal(docs.getJSONObject(i));
                         }
-                    });
-                } else if (resJson.has("error")) {
-                    String error = resJson.optString("reason", "Error en DB");
-                    runOnUiThread(() -> Toast.makeText(this, "Error: " + error, Toast.LENGTH_LONG).show());
+                        runOnUiThread(() -> mostrarPedidos(docs, farmaciaId));
+                        return;
+                    }
                 }
+
+                // Modo Offline: Filtrar el cache local por farmaciaId
+                java.util.List<JSONObject> cache = db.obtenerPedidosAdminCache();
+                JSONArray filtrados = new JSONArray();
+                for (JSONObject p : cache) {
+                    JSONArray fIds = p.optJSONArray("farmacias_ids");
+                    if (fIds != null) {
+                        for (int i = 0; i < fIds.length(); i++) {
+                            if (fIds.getString(i).equals(farmaciaId)) {
+                                filtrados.put(p);
+                                break;
+                            }
+                        }
+                    }
+                }
+                runOnUiThread(() -> mostrarPedidos(filtrados, farmaciaId));
+
             } catch (Exception e) {
                 Log.e("AdminFact", "Error carga pedidos", e);
             }
         }).start();
     }
+
+    private void mostrarPedidos(JSONArray docs, String farmaciaId) {
+        containerReservas.removeAllViews();
+        containerPagosOnline.removeAllViews();
+        
+        if (docs.length() == 0) {
+            Toast.makeText(this, "No hay pedidos para su farmacia", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        for (int i = 0; i < docs.length(); i++) {
+            try {
+                JSONObject pedidoFull = docs.getJSONObject(i);
+                
+                // IMPORTANTE: Filtrar los items para que el admin SOLO vea sus productos
+                JSONObject pedidoFiltrado = new JSONObject(pedidoFull.toString());
+                JSONArray itemsOriginales = pedidoFull.getJSONArray("items");
+                JSONArray itemsMios = new JSONArray();
+                double subtotalMio = 0;
+
+                for (int j = 0; j < itemsOriginales.length(); j++) {
+                    JSONObject item = itemsOriginales.getJSONObject(j);
+                    if (item.optString("id_farmacia").equals(farmaciaId)) {
+                        itemsMios.put(item);
+                        double precio = item.optDouble("precio", 0);
+                        int cant = item.optInt("cantidad", 1);
+                        subtotalMio += (precio * cant);
+                    }
+                }
+
+                // Si por alguna razón este pedido no tiene items de esta farmacia, lo saltamos
+                if (itemsMios.length() == 0) continue;
+
+                // Actualizamos el objeto para mostrar solo lo relevante a este admin
+                pedidoFiltrado.put("items", itemsMios);
+                pedidoFiltrado.put("total_farmacia", subtotalMio);
+
+                String metodo = pedidoFull.optString("metodo_pago", "");
+                if (metodo.equalsIgnoreCase("efectivo")) {
+                    agregarCardPedido(pedidoFiltrado, containerReservas);
+                } else {
+                    agregarCardPedido(pedidoFiltrado, containerPagosOnline);
+                }
+            } catch (Exception e) {
+                Log.e("AdminFact", "Error filtrando pedido", e);
+            }
+        }
+    }
+
 
     private void agregarCardPedido(JSONObject pedido, LinearLayout container) throws Exception {
         View card = getLayoutInflater().inflate(R.layout.item_pedido_admin, container, false);
@@ -117,33 +173,123 @@ public class AdminFacturacionActivity extends AppCompatActivity {
         TextView tvNombre = card.findViewById(R.id.tvPedidoCliente);
         TextView tvFecha = card.findViewById(R.id.tvPedidoFecha);
         TextView tvEstado = card.findViewById(R.id.tvPedidoEstado);
+        TextView tvTotal = card.findViewById(R.id.tvPedidoTotal);
+        TextView tvDetalle = card.findViewById(R.id.tvPedidoDetalleItems);
+        Button btnGenerarFactura = card.findViewById(R.id.btnGenerarFactura);
         
-        String cliente = pedido.optString("cliente_nombre", "Desconocido");
+        String cliente = pedido.optString("cliente_nombre", "");
+        if (cliente.isEmpty() || cliente.equalsIgnoreCase("Desconocido")) {
+            cliente = pedido.optString("cliente_correo", "Cliente Desconocido");
+        }
+        
         String fecha = pedido.optString("fecha", "");
         String estado = pedido.optString("estado", "Pendiente");
+        double total = pedido.optDouble("total_farmacia", pedido.optDouble("total", 0));
         
         tvNombre.setText(cliente);
         tvFecha.setText(fecha);
         tvEstado.setText(estado);
+        tvTotal.setText(String.format(java.util.Locale.US, "Total: $%.2f", total));
         
+        JSONArray items = pedido.optJSONArray("items");
+        StringBuilder resumenItems = new StringBuilder();
+        if (items != null) {
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject it = items.getJSONObject(i);
+                resumenItems.append(it.optString("nombre", "Producto"))
+                           .append(" (x").append(it.optInt("cantidad", 1)).append(")");
+                if (i < items.length() - 1) resumenItems.append(", ");
+            }
+        }
+        tvDetalle.setText(resumenItems.toString());
+        
+        if (btnGenerarFactura != null) {
+            btnGenerarFactura.setOnClickListener(v -> enviarFactura(pedido));
+        }
+
+        final String nombreFinal = cliente;
         card.setOnClickListener(v -> {
             try {
-                JSONArray items = pedido.getJSONArray("items");
                 StringBuilder sb = new StringBuilder("DETALLE DE PEDIDO\n\n");
-                sb.append("Cliente: ").append(pedido.optString("cliente_nombre")).append("\n");
+                sb.append("Cliente: ").append(nombreFinal).append("\n");
                 sb.append("Tel: ").append(pedido.optString("cliente_telefono")).append("\n");
                 sb.append("Dir: ").append(pedido.optString("cliente_direccion")).append("\n\n");
                 sb.append("PRODUCTOS:\n");
 
-                for(int i=0; i<items.length(); i++){
-                    JSONObject it = items.getJSONObject(i);
-                    sb.append("• ").append(it.getString("nombre"))
-                      .append(" x").append(it.getInt("cantidad")).append("\n");
+                if (items != null) {
+                    for(int i=0; i<items.length(); i++){
+                        JSONObject it = items.getJSONObject(i);
+                        sb.append("• ").append(it.getString("nombre"))
+                          .append(" x").append(it.getInt("cantidad")).append("\n");
+                    }
                 }
+                sb.append("\nTOTAL: $").append(String.format(java.util.Locale.US, "%.2f", total));
                 Toast.makeText(this, sb.toString(), Toast.LENGTH_LONG).show();
             } catch (Exception e) {}
         });
 
         container.addView(card);
+    }
+
+    private void enviarFactura(JSONObject pedido) {
+        try {
+            String correoCliente = pedido.optString("cliente_correo", "");
+            String nombreCliente = pedido.optString("cliente_nombre", "Cliente");
+            String fecha = pedido.optString("fecha", "");
+            JSONArray items = pedido.getJSONArray("items");
+            double total = 0;
+
+            if (correoCliente.isEmpty()) {
+                Toast.makeText(this, "El cliente no tiene correo registrado", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            StringBuilder html = new StringBuilder();
+            html.append("<div style='font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px; max-width: 600px;'>")
+                .append("<h2 style='color: #1B4F72; text-align: center;'>FACTURA ELECTRÓNICA</h2>")
+                .append("<p><strong>Cliente:</strong> ").append(nombreCliente).append("</p>")
+                .append("<p><strong>Fecha:</strong> ").append(fecha).append("</p>")
+                .append("<hr>")
+                .append("<table style='width: 100%; border-collapse: collapse;'>")
+                .append("<tr style='background: #f2f2f2;'><th style='text-align: left; padding: 8px;'>Producto</th><th style='padding: 8px;'>Cant.</th><th style='padding: 8px;'>Precio</th><th style='padding: 8px;'>Subtotal</th></tr>");
+
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject it = items.getJSONObject(i);
+                double precio = it.optDouble("precio", 0);
+                int cant = it.optInt("cantidad", 1);
+                double subtotal = precio * cant;
+                total += subtotal;
+
+                html.append("<tr>")
+                    .append("<td style='padding: 8px; border-bottom: 1px solid #eee;'>").append(it.getString("nombre")).append("</td>")
+                    .append("<td style='padding: 8px; border-bottom: 1px solid #eee; text-align: center;'>").append(cant).append("</td>")
+                    .append("<td style='padding: 8px; border-bottom: 1px solid #eee; text-align: center;'>$").append(String.format("%.2f", precio)).append("</td>")
+                    .append("<td style='padding: 8px; border-bottom: 1px solid #eee; text-align: center;'>$").append(String.format("%.2f", subtotal)).append("</td>")
+                    .append("</tr>");
+            }
+
+            html.append("</table>")
+                .append("<h3 style='text-align: right; color: #1B4F72;'>TOTAL A PAGAR: $").append(String.format("%.2f", total)).append("</h3>")
+                .append("<br><p style='font-size: 12px; color: #777;'>Gracias por su compra en Conexión Fármaco.</p>")
+                .append("</div>");
+
+            if (Utilidades.hayInternet(this)) {
+                new MailManager(correoCliente, "🧾 Tu Factura - Conexión Fármaco", html.toString()).execute();
+                Toast.makeText(this, "Factura enviada al correo del cliente", Toast.LENGTH_SHORT).show();
+            } else {
+                // Si no hay internet, guardar el envío del correo como pendiente
+                JSONObject emailPendiente = new JSONObject();
+                emailPendiente.put("destinatario", correoCliente);
+                emailPendiente.put("asunto", "🧾 Tu Factura - Conexión Fármaco");
+                emailPendiente.put("contenido", html.toString());
+                
+                new DBHelper(this).agregarPendiente("", "", emailPendiente.toString(), "email");
+                Toast.makeText(this, "Factura guardada. Se enviará al conectar a internet.", Toast.LENGTH_LONG).show();
+            }
+
+        } catch (Exception e) {
+            Toast.makeText(this, "Error al generar factura", Toast.LENGTH_SHORT).show();
+            Log.e("AdminFact", "Error factura", e);
+        }
     }
 }

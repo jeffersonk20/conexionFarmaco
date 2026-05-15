@@ -44,31 +44,61 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
     private void cargarMedicamentos() {
         new Thread(() -> {
             try {
-                JSONObject selector = new JSONObject();
-                JSONObject query = new JSONObject();
-                query.put("id_farmacia", farmaciaId);
-                selector.put("selector", query);
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    JSONObject query = new JSONObject();
+                    query.put("id_farmacia", farmaciaId);
+                    selector.put("selector", query);
 
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerMed.removeAllViews();
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
                         for (int i = 0; i < docs.length(); i++) {
-                            try {
-                                agregarCardMedicamento(docs.getJSONObject(i));
-                            } catch (Exception e) {}
+                            db.guardarMedicamentoLocal(docs.getJSONObject(i));
                         }
-                    });
+                        runOnUiThread(() -> mostrarMedicamentos(docs));
+                        return;
+                    }
                 }
+
+                // Fallback Offline: Buscar en el cache local de medicamentos
+                DBHelper db = new DBHelper(this);
+                java.util.List<JSONObject> cache = db.obtenerMedicamentosCache(null, false);
+                JSONArray filtrados = new JSONArray();
+                for (JSONObject med : cache) {
+                    if (med.optString("id_farmacia").equals(farmaciaId)) {
+                        filtrados.put(med);
+                    }
+                }
+                runOnUiThread(() -> mostrarMedicamentos(filtrados));
+
             } catch (Exception e) {
                 Log.e("FarmaciaDetalle", "Error", e);
             }
         }).start();
     }
+
+    private void mostrarMedicamentos(JSONArray docs) {
+        containerMed.removeAllViews();
+        if (docs.length() == 0) {
+            TextView tv = new TextView(this);
+            tv.setText("Esta farmacia aún no tiene medicamentos registrados.");
+            tv.setPadding(20, 50, 20, 20);
+            tv.setGravity(android.view.Gravity.CENTER);
+            containerMed.addView(tv);
+        } else {
+            for (int i = 0; i < docs.length(); i++) {
+                try {
+                    agregarCardMedicamento(docs.getJSONObject(i));
+                } catch (Exception e) {}
+            }
+        }
+    }
+
 
     private void agregarCardMedicamento(JSONObject med) throws Exception {
         View card = getLayoutInflater().inflate(R.layout.item_medicamento_cliente, null);

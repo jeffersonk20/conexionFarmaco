@@ -10,6 +10,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
 
 public class FarmaciasActivity extends AppCompatActivity {
 
@@ -31,31 +32,38 @@ public class FarmaciasActivity extends AppCompatActivity {
     private void cargarFarmacias() {
         new Thread(() -> {
             try {
-                // Consultar todas las farmacias registradas
-                JSONObject selector = new JSONObject();
-                selector.put("selector", new JSONObject().put("tipo", "farmacia"));
-                
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerFarmacias.removeAllViews();
-                        for (int i = 0; i < docs.length(); i++) {
-                            try {
-                                JSONObject farmacia = docs.getJSONObject(i);
-                                agregarCardFarmacia(farmacia);
-                            } catch (Exception e) {}
-                        }
-                    });
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("tipo", "farmacia"));
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < docs.length(); i++) db.guardarFarmaciaCache(docs.getJSONObject(i));
+                        runOnUiThread(() -> mostrarFarmacias(docs));
+                        return;
+                    }
                 }
+                // Si offline o falla red
+                List<JSONObject> cache = new DBHelper(this).obtenerFarmaciasCache();
+                runOnUiThread(() -> mostrarFarmacias(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("FarmaciasAct", "Error carga", e);
             }
         }).start();
     }
+
+    private void mostrarFarmacias(JSONArray docs) {
+        containerFarmacias.removeAllViews();
+        for (int i = 0; i < docs.length(); i++) {
+            try {
+                agregarCardFarmacia(docs.getJSONObject(i));
+            } catch (Exception e) {}
+        }
+    }
+
 
     private void agregarCardFarmacia(JSONObject farmacia) throws Exception {
         View card = getLayoutInflater().inflate(R.layout.item_farmacia_cliente, null);

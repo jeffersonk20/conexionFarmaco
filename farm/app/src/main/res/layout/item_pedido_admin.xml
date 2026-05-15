@@ -47,5 +47,39 @@
             android:paddingHorizontal="6dp"
             android:paddingVertical="2dp" />
 
+        <TextView
+            android:id="@+id/tvPedidoTotal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Total: $0.00"
+            android:textColor="@color/black"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvPedidoDetalleItems"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Detalle de productos..."
+            android:textColor="@color/texto_secundario"
+            android:textSize="11sp"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <Button
+            android:id="@+id/btnGenerarFactura"
+            android:layout_width="match_parent"
+            android:layout_height="35dp"
+            android:layout_marginTop="8dp"
+            android:text="Generar Factura"
+            android:textSize="12sp"
+            android:backgroundTint="@color/azul_primario"
+            android:textColor="@color/white"
+            android:textAllCaps="false"
+            android:padding="0dp"
+            android:gravity="center" />
+
     </LinearLayout>
 </androidx.cardview.widget.CardView>

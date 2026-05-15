@@ -21,7 +21,6 @@
             android:layout_height="match_parent"
             android:scaleType="centerCrop"
             android:src="@android:drawable/ic_menu_camera"
-            app:tint="@color/azul_suave"
             android:contentDescription="Foto" />
     </androidx.cardview.widget.CardView>
 
