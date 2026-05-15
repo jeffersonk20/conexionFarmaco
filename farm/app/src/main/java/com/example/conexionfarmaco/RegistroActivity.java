@@ -77,6 +77,53 @@ public class RegistroActivity extends AppCompatActivity {
                 R.array.enfermedades, R.layout.spinner_item);
         adapterEnfermedades.setDropDownViewResource(R.layout.spinner_dropdown_item);
         spEnfermedades.setAdapter(adapterEnfermedades);
+
+        spEnfermedades.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
+                String selected = parent.getItemAtPosition(position).toString();
+                if (!selected.equals("Ninguna") && !selected.equals("Otras")) {
+                    mostrarConsejoSalud(selected);
+                }
+            }
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+    }
+
+    private void mostrarConsejoSalud(String enfermedad) {
+        String consejo = "";
+        switch (enfermedad) {
+            case "Diabetes":
+                consejo = "Te recomendaremos insulinas, metformina y equipos de monitoreo de glucosa.";
+                break;
+            case "Hipertensión":
+                consejo = "Encontrarás antihipertensivos como Losartán y Enalapril en tu sección de recomendados.";
+                break;
+            case "Asma":
+                consejo = "Podrás ver inhaladores y broncodilatadores sugeridos para tu condición.";
+                break;
+            case "Gastritis":
+                consejo = "Te sugeriremos protectores gástricos y antiácidos efectivos.";
+                break;
+            case "Arritmia":
+                consejo = "Verás medicamentos especializados para el cuidado del ritmo cardíaco.";
+                break;
+            case "Obesidad":
+                consejo = "Te mostraremos complementos y opciones para el control de peso.";
+                break;
+            case "Hipotiroidismo":
+                consejo = "Sugeriremos Levotiroxina y otros fármacos para el control tiroideo.";
+                break;
+        }
+        
+        if (!consejo.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("💡 Recomendación de Salud")
+                    .setMessage("Al seleccionar " + enfermedad + ", personalizaremos tu pantalla de inicio con medicamentos adecuados para ti.\n\n" + consejo)
+                    .setPositiveButton("Entendido", null)
+                    .show();
+        }
     }
 
     private void elegirImagen() {

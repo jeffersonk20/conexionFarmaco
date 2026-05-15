@@ -17,9 +17,10 @@ import java.util.List;
 
 public class HomeActivity extends AppCompatActivity {
 
-    private LinearLayout containerPromociones, containerRecomendados, containerBusqueda;
+    private LinearLayout containerPromociones, containerBusqueda;
     private EditText etBuscador;
-    private TextView tvDestacados, tvRecomendados;
+    private TextView tvDestacados, tvTituloInfoSalud;
+    private View cardInfoSalud;
     private String userEnfermedades = "", userAlergias = "";
 
     @Override
@@ -28,14 +29,22 @@ public class HomeActivity extends AppCompatActivity {
         setContentView(R.layout.activity_home);
 
         containerPromociones = findViewById(R.id.containerPromociones);
-        containerRecomendados = findViewById(R.id.containerRecomendados);
         containerBusqueda = findViewById(R.id.containerBusqueda);
         etBuscador = findViewById(R.id.etBuscadorHome);
         tvDestacados = findViewById(R.id.tvDestacados);
-        tvRecomendados = findViewById(R.id.tvRecomendados);
+        cardInfoSalud = findViewById(R.id.cardInfoSalud);
+        tvTituloInfoSalud = findViewById(R.id.tvTituloInfoSalud);
 
         // Obtener datos del usuario para recomendaciones
         cargarDatosUsuario();
+        mostrarBannerSalud();
+
+        if (cardInfoSalud != null) {
+            cardInfoSalud.setOnClickListener(v -> {
+                Intent intent = new Intent(HomeActivity.this, RecomendacionesSaludActivity.class);
+                startActivity(intent);
+            });
+        }
 
         ImageView ivMenu = findViewById(R.id.ivMenu);
         if (ivMenu != null) {
@@ -69,7 +78,6 @@ public class HomeActivity extends AppCompatActivity {
 
         // Cargar secciones iniciales
         cargarPromociones();
-        cargarRecomendaciones();
 
         // Intentar sincronizar datos pendientes
         Utilidades.sincronizar(this);
@@ -105,25 +113,24 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
+    private void mostrarBannerSalud() {
+        if (userEnfermedades.equalsIgnoreCase("Ninguna") || userEnfermedades.isEmpty()) {
+            cardInfoSalud.setVisibility(View.GONE);
+            return;
+        }
+
+        cardInfoSalud.setVisibility(View.VISIBLE);
+        tvTituloInfoSalud.setText("Cuidado " + userEnfermedades);
+    }
+
     private void mostrarModoBusqueda(boolean busquedaActiva) {
         if (busquedaActiva) {
             tvDestacados.setVisibility(View.GONE);
             containerPromociones.setVisibility(View.GONE);
-            tvRecomendados.setVisibility(View.GONE);
-            containerRecomendados.setVisibility(View.GONE);
             containerBusqueda.setVisibility(View.VISIBLE);
         } else {
             tvDestacados.setVisibility(View.VISIBLE);
             containerPromociones.setVisibility(View.VISIBLE);
-            
-            // Solo mostrar recomendaciones si hay elementos y no es el placeholder de "vacio"
-            if (containerRecomendados.getChildCount() > 0) {
-                View firstChild = containerRecomendados.getChildAt(0);
-                if (firstChild.getTag() == null || !firstChild.getTag().equals("empty")) {
-                    tvRecomendados.setVisibility(View.VISIBLE);
-                    containerRecomendados.setVisibility(View.VISIBLE);
-                }
-            }
             containerBusqueda.setVisibility(View.GONE);
         }
     }
@@ -164,80 +171,6 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
-
-    private void cargarRecomendaciones() {
-        if (userEnfermedades.equalsIgnoreCase("Ninguna") && userAlergias.isEmpty()) {
-            runOnUiThread(() -> {
-                tvRecomendados.setVisibility(View.GONE);
-                containerRecomendados.setVisibility(View.GONE);
-                View v = new View(this); v.setTag("empty"); containerRecomendados.addView(v);
-            });
-            return;
-        }
-
-        new Thread(() -> {
-            try {
-                // Construir términos de búsqueda basados en salud
-                StringBuilder regexBuilder = new StringBuilder("(?i)");
-                boolean hasTerms = false;
-
-                if (!userEnfermedades.equalsIgnoreCase("Ninguna")) {
-                    regexBuilder.append(userEnfermedades).append("|");
-                    // Añadir palabras clave relacionadas
-                    if (userEnfermedades.contains("Diabetes")) regexBuilder.append("insulina|metformina|glibenclamida|glucosa|");
-                    if (userEnfermedades.contains("Hipertensión")) regexBuilder.append("enalapril|losartan|amlodipino|presion|");
-                    if (userEnfermedades.contains("Asma")) regexBuilder.append("salbutamol|inhalador|montelukast|");
-                    if (userEnfermedades.contains("Gastritis")) regexBuilder.append("omeprazol|pantoprazol|antiacido|");
-                    hasTerms = true;
-                }
-                
-                if (!userAlergias.isEmpty()) {
-                    regexBuilder.append("loratadina|cetirizina|clorfenamina|alergia|");
-                    hasTerms = true;
-                }
-
-                if (!hasTerms) return;
-                
-                String finalRegex = regexBuilder.toString();
-                if (finalRegex.endsWith("|")) finalRegex = finalRegex.substring(0, finalRegex.length() - 1);
-
-                JSONObject selector = new JSONObject();
-                JSONArray orArray = new JSONArray();
-                
-                orArray.put(new JSONObject().put("nombre", new JSONObject().put("$regex", finalRegex)));
-                orArray.put(new JSONObject().put("presentacion", new JSONObject().put("$regex", finalRegex)));
-                
-                selector.put("selector", new JSONObject().put("$or", orArray));
-                selector.put("limit", 5);
-
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                
-                JSONObject resJson = new JSONObject(res);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        containerRecomendados.removeAllViews();
-                        if (docs.length() > 0) {
-                            tvRecomendados.setVisibility(View.VISIBLE);
-                            containerRecomendados.setVisibility(View.VISIBLE);
-                            for (int i = 0; i < docs.length(); i++) {
-                                try {
-                                    containerRecomendados.addView(crearCardMedicamento(docs.getJSONObject(i)));
-                                } catch (Exception e) {}
-                            }
-                        } else {
-                            tvRecomendados.setVisibility(View.GONE);
-                            containerRecomendados.setVisibility(View.GONE);
-                            View v = new View(this); v.setTag("empty"); containerRecomendados.addView(v);
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                Log.e("HomeAct", "Error recomendados", e);
-            }
-        }).start();
-    }
 
     private void buscarMedicamentos(String query) {
         new Thread(() -> {
