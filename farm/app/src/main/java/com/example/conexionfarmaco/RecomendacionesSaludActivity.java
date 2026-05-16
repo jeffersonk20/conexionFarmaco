@@ -11,6 +11,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
+import java.util.ArrayList;
 
 public class RecomendacionesSaludActivity extends AppCompatActivity {
     private LinearLayout container;
@@ -95,34 +97,55 @@ public class RecomendacionesSaludActivity extends AppCompatActivity {
                 String finalRegex = regexBuilder.toString();
                 if (finalRegex.endsWith("|")) finalRegex = finalRegex.substring(0, finalRegex.length() - 1);
 
-                JSONObject selector = new JSONObject();
-                JSONArray orArray = new JSONArray();
-                orArray.put(new JSONObject().put("nombre", new JSONObject().put("$regex", finalRegex)));
-                orArray.put(new JSONObject().put("presentacion", new JSONObject().put("$regex", finalRegex)));
-                selector.put("selector", new JSONObject().put("$or", orArray));
+                JSONArray docs = null;
 
-                TareaServidor tarea = new TareaServidor();
-                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                JSONObject resJson = new JSONObject(res);
-                
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    runOnUiThread(() -> {
-                        container.removeAllViews();
-                        for (int i = 0; i < docs.length(); i++) {
-                            try {
-                                container.addView(crearCardMedicamento(docs.getJSONObject(i)));
-                            } catch (Exception e) {}
+                if (Utilidades.hayInternet(this)) {
+                    try {
+                        JSONObject selector = new JSONObject();
+                        JSONArray orArray = new JSONArray();
+                        orArray.put(new JSONObject().put("nombre", new JSONObject().put("$regex", finalRegex)));
+                        orArray.put(new JSONObject().put("presentacion", new JSONObject().put("$regex", finalRegex)));
+                        selector.put("selector", new JSONObject().put("$or", orArray));
+
+                        TareaServidor tarea = new TareaServidor();
+                        String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                        JSONObject resJson = new JSONObject(res);
+                        if (resJson.has("docs")) {
+                            docs = resJson.getJSONArray("docs");
+                            // Guardar en cache local para uso offline
+                            DBHelper db = new DBHelper(this);
+                            for (int i = 0; i < docs.length(); i++) {
+                                db.guardarMedicamentoLocal(docs.getJSONObject(i));
+                            }
                         }
-                        if (docs.length() == 0) {
-                            TextView empty = new TextView(this);
-                            empty.setText("No se encontraron medicamentos específicos por el momento.");
-                            empty.setPadding(20, 50, 20, 20);
-                            empty.setGravity(android.view.Gravity.CENTER);
-                            container.addView(empty);
-                        }
-                    });
+                    } catch (Exception e) {
+                        Log.e("RecSalud", "Error server, usando cache", e);
+                    }
                 }
+
+                if (docs == null) {
+                    // Cargar de cache local
+                    DBHelper db = new DBHelper(this);
+                    List<JSONObject> cache = db.obtenerMedicamentosCache(finalRegex, false);
+                    docs = new JSONArray(cache);
+                }
+
+                final JSONArray finalDocs = docs;
+                runOnUiThread(() -> {
+                    container.removeAllViews();
+                    for (int i = 0; i < finalDocs.length(); i++) {
+                        try {
+                            container.addView(crearCardMedicamento(finalDocs.getJSONObject(i)));
+                        } catch (Exception e) {}
+                    }
+                    if (finalDocs.length() == 0) {
+                        TextView empty = new TextView(this);
+                        empty.setText("No se encontraron medicamentos específicos por el momento.");
+                        empty.setPadding(20, 50, 20, 20);
+                        empty.setGravity(android.view.Gravity.CENTER);
+                        container.addView(empty);
+                    }
+                });
             } catch (Exception e) {
                 Log.e("RecSalud", "Error cargando recomendaciones", e);
             }

@@ -134,12 +134,29 @@ public class DBHelper extends SQLiteOpenHelper {
         guardarMedicamentoCache(med);
     }
 
+    public void eliminarMedicamentoLocal(String id) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete("medicamentos", "id = ?", new String[]{id});
+    }
+
     public List<JSONObject> obtenerMedicamentosCache(String query, boolean soloPromos) {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
         String sql = "SELECT * FROM medicamentos";
-        if (soloPromos) sql += " WHERE promocion = 1";
-        else if (query != null && !query.isEmpty()) sql += " WHERE nombre LIKE '%" + query + "%'";
+        
+        if (soloPromos) {
+            sql += " WHERE promocion = 1";
+        } else if (query != null && !query.isEmpty()) {
+            // Manejar múltiples términos de búsqueda (separados por | o espacios)
+            String[] terms = query.replace("(?i)", "").split("\\|");
+            sql += " WHERE ";
+            for (int i = 0; i < terms.length; i++) {
+                String term = terms[i].trim();
+                if (term.isEmpty()) continue;
+                sql += "(nombre LIKE '%" + term + "%' OR presentacion LIKE '%" + term + "%')";
+                if (i < terms.length - 1) sql += " OR ";
+            }
+        }
 
         Cursor cursor = db.rawQuery(sql, null);
         if (cursor.moveToFirst()) {

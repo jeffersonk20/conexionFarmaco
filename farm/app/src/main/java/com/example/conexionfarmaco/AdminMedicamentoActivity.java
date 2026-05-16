@@ -218,10 +218,10 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                     }
                 }
 
-                // Si no hay internet o falló el servidor, ya está en SQLite, solo agregar a pendientes
+                // Si no hay internet o falló el servidor, agregar a pendientes
                 dbHelper.agregarPendiente(url, metodo, json.toString(), "couchdb");
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Guardado localmente. Se sincronizará luego.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Guardado localmente. Se sincronizará al conectar.", Toast.LENGTH_SHORT).show();
                     finish();
                 });
 
@@ -245,17 +245,46 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                         String rev = medEdicion.getString("_rev");
                         String url = Utilidades.url_medicamentos + "/" + id + "?rev=" + rev;
                         
-                        TareaServidor tarea = new TareaServidor();
-                        String res = tarea.execute("", "DELETE", url).get();
+                        DBHelper dbHelper = new DBHelper(this);
+                        dbHelper.eliminarMedicamentoLocal(id);
                         
-                        if (new JSONObject(res).optBoolean("ok", false)) {
-                            runOnUiThread(() -> {
-                                Toast.makeText(this, "Eliminado con éxito", Toast.LENGTH_SHORT).show();
-                                finish();
-                            });
+                        if (Utilidades.hayInternet(this)) {
+                            TareaServidor tarea = new TareaServidor();
+                            String res = tarea.execute("", "DELETE", url).get();
+                            JSONObject resJson = new JSONObject(res);
+                            
+                            if (resJson.optBoolean("ok", false)) {
+                                runOnUiThread(() -> {
+                                    Toast.makeText(this, "Eliminado con éxito", Toast.LENGTH_SHORT).show();
+                                    finish();
+                                });
+                                return;
+                            }
                         }
+
+                        // Si no hay internet o falló el servidor, agregar a pendientes
+                        dbHelper.agregarPendiente(url, "DELETE", "", "couchdb");
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Eliminado localmente. Se sincronizará al conectar.", Toast.LENGTH_SHORT).show();
+                            finish();
+                        });
+                        
                     } catch (Exception e) {
                         Log.e("AdminMed", "Error delete", e);
+                        try {
+                            String id = medEdicion.getString("_id");
+                            DBHelper db = new DBHelper(this);
+                            db.eliminarMedicamentoLocal(id);
+                            // Intentar agregar a pendientes incluso si falló el bloque try principal
+                            String rev = medEdicion.getString("_rev");
+                            String url = Utilidades.url_medicamentos + "/" + id + "?rev=" + rev;
+                            db.agregarPendiente(url, "DELETE", "", "couchdb");
+                        } catch (Exception ex) {}
+                        
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Eliminado localmente. Sincronización pendiente.", Toast.LENGTH_SHORT).show();
+                            finish();
+                        });
                     }
                 }).start();
             })
