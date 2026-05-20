@@ -5,6 +5,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
 import androidx.annotation.Nullable;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -13,7 +14,7 @@ import java.util.List;
 
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "conexion_farmaco.db";
-    private static final int DATABASE_VERSION = 11;
+    private static final int DATABASE_VERSION = 14;
 
     public DBHelper(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -21,25 +22,29 @@ public class DBHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE usuarios (id TEXT PRIMARY KEY, nombres TEXT, apellidos TEXT, telefono TEXT, correo TEXT, clave TEXT, " +
+        db.execSQL("CREATE TABLE usuarios (id TEXT PRIMARY KEY, rev TEXT, nombres TEXT, apellidos TEXT, telefono TEXT, correo TEXT, clave TEXT, " +
                 "direccion TEXT, alergias TEXT, tipo_sangre TEXT, enfermedades TEXT, foto TEXT)");
-        db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT)");
-        db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, nombre_farmacia TEXT, enfermedad_objetivo TEXT)");
-        db.execSQL("CREATE TABLE pedidos (id TEXT PRIMARY KEY, cliente_correo TEXT, cliente_nombre TEXT, cliente_direccion TEXT, cliente_telefono TEXT, items TEXT, total TEXT, fecha TEXT, estado TEXT, metodo_pago TEXT, farmacias_ids TEXT)");
+        db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, rev TEXT, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT)");
+        db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, rev TEXT, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, foto2 TEXT, foto3 TEXT, nombre_farmacia TEXT, enfermedad_objetivo TEXT, is_deleted INTEGER DEFAULT 0)");
+        db.execSQL("CREATE TABLE pedidos (id TEXT PRIMARY KEY, rev TEXT, cliente_correo TEXT, cliente_nombre TEXT, cliente_direccion TEXT, cliente_telefono TEXT, items TEXT, total TEXT, fecha TEXT, estado TEXT, metodo_pago TEXT, farmacias_ids TEXT)");
         db.execSQL("CREATE TABLE pendientes (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT, metodo TEXT, json TEXT, tipo TEXT)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 11) {
-            db.execSQL("ALTER TABLE medicamentos ADD COLUMN enfermedad_objetivo TEXT");
-        } else {
-            db.execSQL("DROP TABLE IF EXISTS usuarios");
-            db.execSQL("DROP TABLE IF EXISTS farmacias");
-            db.execSQL("DROP TABLE IF EXISTS medicamentos");
-            db.execSQL("DROP TABLE IF EXISTS pedidos");
-            db.execSQL("DROP TABLE IF EXISTS pendientes");
-            onCreate(db);
+        if (oldVersion < 11) { try { db.execSQL("ALTER TABLE medicamentos ADD COLUMN enfermedad_objetivo TEXT"); } catch(Exception e){} }
+        if (oldVersion < 12) {
+            try { db.execSQL("ALTER TABLE usuarios ADD COLUMN rev TEXT"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE farmacias ADD COLUMN rev TEXT"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE medicamentos ADD COLUMN rev TEXT"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE pedidos ADD COLUMN rev TEXT"); } catch (Exception e) {}
+        }
+        if (oldVersion < 13) {
+            try { db.execSQL("ALTER TABLE medicamentos ADD COLUMN foto2 TEXT"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE medicamentos ADD COLUMN foto3 TEXT"); } catch (Exception e) {}
+        }
+        if (oldVersion < 14) {
+            try { db.execSQL("ALTER TABLE medicamentos ADD COLUMN is_deleted INTEGER DEFAULT 0"); } catch (Exception e) {}
         }
     }
 
@@ -61,11 +66,11 @@ public class DBHelper extends SQLiteOpenHelper {
             do {
                 try {
                     JSONObject obj = new JSONObject();
-                    obj.put("id_local", cursor.getString(0));
-                    obj.put("url", cursor.getString(1));
-                    obj.put("metodo", cursor.getString(2));
-                    obj.put("json", cursor.getString(3));
-                    obj.put("tipo", cursor.getString(4));
+                    obj.put("id_local", cursor.getString(cursor.getColumnIndexOrThrow("id")));
+                    obj.put("url", cursor.getString(cursor.getColumnIndexOrThrow("url")));
+                    obj.put("metodo", cursor.getString(cursor.getColumnIndexOrThrow("metodo")));
+                    obj.put("json", cursor.getString(cursor.getColumnIndexOrThrow("json")));
+                    obj.put("tipo", cursor.getString(cursor.getColumnIndexOrThrow("tipo")));
                     lista.add(obj);
                 } catch (Exception e) { e.printStackTrace(); }
             } while (cursor.moveToNext());
@@ -84,6 +89,7 @@ public class DBHelper extends SQLiteOpenHelper {
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put("id", farm.getString("_id"));
+            cv.put("rev", farm.optString("_rev", ""));
             cv.put("empresa", farm.getString("empresa"));
             cv.put("direccion", farm.optString("direccion", ""));
             cv.put("telefono", farm.optString("telefono", ""));
@@ -102,13 +108,14 @@ public class DBHelper extends SQLiteOpenHelper {
             do {
                 try {
                     JSONObject obj = new JSONObject();
-                    obj.put("_id", c.getString(0));
-                    obj.put("empresa", c.getString(1));
-                    obj.put("direccion", c.getString(2));
-                    obj.put("telefono", c.getString(3));
-                    obj.put("correo", c.getString(4));
-                    obj.put("foto", c.getString(6));
-                    obj.put("descripcion", c.getString(7));
+                    obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                    obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                    obj.put("empresa", c.getString(c.getColumnIndexOrThrow("empresa")));
+                    obj.put("direccion", c.getString(c.getColumnIndexOrThrow("direccion")));
+                    obj.put("telefono", c.getString(c.getColumnIndexOrThrow("telefono")));
+                    obj.put("correo", c.getString(c.getColumnIndexOrThrow("correo")));
+                    obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
+                    obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (c.moveToNext());
@@ -119,9 +126,17 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public void guardarMedicamentoCache(JSONObject med) {
         try {
+            String id = med.getString("_id");
+            
+            // ESCUDO: No guardar si está pendiente de sincronizar O si está marcado como borrado localmente
+            if (estaPendienteSincronizacion(id) || estaMarcadoComoBorrado(id)) {
+                return;
+            }
+
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
-            cv.put("id", med.getString("_id"));
+            cv.put("id", id);
+            cv.put("rev", med.optString("_rev", ""));
             cv.put("id_farmacia", med.optString("id_farmacia", ""));
             cv.put("nombre", med.optString("nombre", ""));
             cv.put("precio", med.optString("precio", "0"));
@@ -129,10 +144,31 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("presentacion", med.optString("presentacion", ""));
             cv.put("promocion", med.optBoolean("promocion", false) ? 1 : 0);
             cv.put("foto1", med.optString("foto1", ""));
+            cv.put("foto2", med.optString("foto2", ""));
+            cv.put("foto3", med.optString("foto3", ""));
             cv.put("nombre_farmacia", med.optString("nombre_farmacia", ""));
             cv.put("enfermedad_objetivo", med.optString("enfermedad_objetivo", "Ninguna"));
+            cv.put("is_deleted", 0);
             db.insertWithOnConflict("medicamentos", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            Log.e("DBHelper", "Error guardando medicamento cache", e);
+        }
+    }
+
+    private boolean estaPendienteSincronizacion(String id) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT id FROM pendientes WHERE url LIKE ?", new String[]{"%" + id + "%"});
+        boolean pendiente = c.getCount() > 0;
+        c.close();
+        return pendiente;
+    }
+
+    private boolean estaMarcadoComoBorrado(String id) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT id FROM medicamentos WHERE id = ? AND is_deleted = 1", new String[]{id});
+        boolean borrado = c.getCount() > 0;
+        c.close();
+        return borrado;
     }
 
     public void guardarMedicamentoLocal(JSONObject med) {
@@ -141,56 +177,80 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public void eliminarMedicamentoLocal(String id) {
         SQLiteDatabase db = this.getWritableDatabase();
+        // En lugar de borrar, marcamos como eliminado (Tombstone)
+        ContentValues cv = new ContentValues();
+        cv.put("is_deleted", 1);
+        db.update("medicamentos", cv, "id = ?", new String[]{id});
+    }
+
+    public void eliminarMedicamentoDefinitivo(String id) {
+        SQLiteDatabase db = this.getWritableDatabase();
         db.delete("medicamentos", "id = ?", new String[]{id});
+    }
+
+    public void limpiarMedicamentosFarmacia(String farmaciaId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete("medicamentos", "id_farmacia = ? AND is_deleted = 0", new String[]{farmaciaId});
+    }
+
+    public void limpiarFarmaciasCache() {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete("farmacias", null, null);
+    }
+
+    public void limpiarMedicamentosPromocion() {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete("medicamentos", "promocion = 1 AND is_deleted = 0", null);
+    }
+
+    public void limpiarDatosHuerfanos() {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            db.execSQL("DELETE FROM medicamentos WHERE id_farmacia NOT IN (SELECT id FROM farmacias) AND is_deleted = 0");
+            db.execSQL("DELETE FROM medicamentos WHERE nombre IS NULL OR nombre = ''");
+        } catch (Exception e) {}
     }
 
     public List<JSONObject> obtenerMedicamentosCache(String query, boolean soloPromos) {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-        String sql = "SELECT * FROM medicamentos";
+        
+        // FILTRO: is_deleted = 0
+        String sql = "SELECT m.* FROM medicamentos m WHERE m.is_deleted = 0 AND m.id_farmacia IN (SELECT id FROM farmacias)";
         
         List<String> selectionArgs = new ArrayList<>();
         StringBuilder whereClause = new StringBuilder();
 
         if (soloPromos) {
-            whereClause.append("promocion = 1");
+            whereClause.append(" AND m.promocion = 1");
         } else if (query != null && !query.isEmpty()) {
-            // Normalización extrema para SQLite: reemplaza todas las vocales por '_'
-            // Esto permite que 'Anadén', 'anaden', 'ANADEN' coincidan con cualquier variante
-            // También eliminamos puntos y comas que pueda traer la voz
             String cleanQuery = query.toLowerCase().replaceAll("[.,]", "").trim();
-            String flexibleQuery = cleanQuery
-                    .replaceAll("[aáàä]", "_")
-                    .replaceAll("[eéèë]", "_")
-                    .replaceAll("[iíìï]", "_")
-                    .replaceAll("[oóòö]", "_")
-                    .replaceAll("[uúùü]", "_");
-
-            whereClause.append("(enfermedad_objetivo LIKE ? OR nombre LIKE ? OR presentacion LIKE ?)");
-            String param = "%" + flexibleQuery + "%";
-            selectionArgs.add(param);
-            selectionArgs.add(param);
-            selectionArgs.add(param);
+            String normalizedQuery = cleanQuery.replaceAll("[áàä]", "a").replaceAll("[éèë]", "e").replaceAll("[íìï]", "i").replaceAll("[óòö]", "o").replaceAll("[úùü]", "u");
+            String param = "%" + normalizedQuery + "%";
+            String sqlNormalizer = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(%s), 'á','a'), 'é','e'), 'í','i'), 'ó','o'), 'ú','u'), 'ü','u')";
+            whereClause.append(" AND (" + String.format(sqlNormalizer, "m.enfermedad_objetivo") + " LIKE ? OR " + String.format(sqlNormalizer, "m.nombre") + " LIKE ? OR " + String.format(sqlNormalizer, "m.presentacion") + " LIKE ?)");
+            selectionArgs.add(param); selectionArgs.add(param); selectionArgs.add(param);
         }
-
-        if (whereClause.length() > 0) {
-            sql += " WHERE " + whereClause.toString();
-        }
+        sql += whereClause.toString();
 
         Cursor cursor = db.rawQuery(sql, selectionArgs.toArray(new String[0]));
         if (cursor.moveToFirst()) {
             do {
                 try {
                     JSONObject obj = new JSONObject();
-                    obj.put("_id", cursor.getString(0));
-                    obj.put("id_farmacia", cursor.getString(1));
-                    obj.put("nombre", cursor.getString(2));
-                    obj.put("precio", cursor.getString(3));
-                    obj.put("stock", cursor.getString(4));
-                    obj.put("presentacion", cursor.getString(5));
-                    obj.put("foto1", cursor.getString(7));
-                    obj.put("nombre_farmacia", cursor.getString(8));
-                    obj.put("enfermedad_objetivo", cursor.getString(9));
+                    obj.put("_id", cursor.getString(cursor.getColumnIndexOrThrow("id")));
+                    obj.put("_rev", cursor.getString(cursor.getColumnIndexOrThrow("rev")));
+                    obj.put("id_farmacia", cursor.getString(cursor.getColumnIndexOrThrow("id_farmacia")));
+                    obj.put("nombre", cursor.getString(cursor.getColumnIndexOrThrow("nombre")));
+                    obj.put("precio", cursor.getString(cursor.getColumnIndexOrThrow("precio")));
+                    obj.put("stock", cursor.getString(cursor.getColumnIndexOrThrow("stock")));
+                    obj.put("presentacion", cursor.getString(cursor.getColumnIndexOrThrow("presentacion")));
+                    obj.put("promocion", cursor.getInt(cursor.getColumnIndexOrThrow("promocion")) == 1);
+                    obj.put("foto1", cursor.getString(cursor.getColumnIndexOrThrow("foto1")));
+                    obj.put("foto2", cursor.getString(cursor.getColumnIndexOrThrow("foto2")));
+                    obj.put("foto3", cursor.getString(cursor.getColumnIndexOrThrow("foto3")));
+                    obj.put("nombre_farmacia", cursor.getString(cursor.getColumnIndexOrThrow("nombre_farmacia")));
+                    obj.put("enfermedad_objetivo", cursor.getString(cursor.getColumnIndexOrThrow("enfermedad_objetivo")));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (cursor.moveToNext());
@@ -204,6 +264,7 @@ public class DBHelper extends SQLiteOpenHelper {
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put("id", p.getString("_id"));
+            cv.put("rev", p.optString("_rev", ""));
             cv.put("cliente_correo", p.optString("cliente_correo", ""));
             cv.put("cliente_nombre", p.optString("cliente_nombre", ""));
             cv.put("cliente_direccion", p.optString("cliente_direccion", ""));
@@ -225,10 +286,43 @@ public class DBHelper extends SQLiteOpenHelper {
         } catch (Exception e) {}
     }
 
+    public void actualizarRevEnPendientes(String id, String nuevoRev) {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            Cursor c = db.rawQuery("SELECT id, url, json FROM pendientes WHERE url LIKE ?", new String[]{"%" + id + "%"});
+            if (c.moveToFirst()) {
+                do {
+                    int pId = c.getInt(0);
+                    String pUrl = c.getString(1);
+                    String pJson = c.getString(2);
+                    if (pUrl.contains("?rev=")) pUrl = pUrl.substring(0, pUrl.indexOf("?rev=")) + "?rev=" + nuevoRev;
+                    else if (pUrl.contains("&rev=")) pUrl = pUrl.replaceAll("rev=[^&]+", "rev=" + nuevoRev);
+                    try {
+                        if (pJson != null && pJson.startsWith("{")) {
+                            JSONObject jobj = new JSONObject(pJson);
+                            if (jobj.has("_rev")) { jobj.put("_rev", nuevoRev); pJson = jobj.toString(); }
+                        }
+                    } catch (Exception e) {}
+                    ContentValues cv = new ContentValues();
+                    cv.put("url", pUrl); cv.put("json", pJson);
+                    db.update("pendientes", cv, "id = ?", new String[]{String.valueOf(pId)});
+                } while (c.moveToNext());
+            }
+            c.close();
+        } catch (Exception e) {}
+    }
+
     public void limpiarPedidosUsuario(String correo) {
         try {
             SQLiteDatabase db = this.getWritableDatabase();
             db.delete("pedidos", "cliente_correo = ?", new String[]{correo});
+        } catch (Exception e) {}
+    }
+
+    public void limpiarPedidosFarmacia(String farmaciaId) {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            db.delete("pedidos", "farmacias_ids LIKE ?", new String[]{"%\"" + farmaciaId + "\"%"});
         } catch (Exception e) {}
     }
 
@@ -240,16 +334,17 @@ public class DBHelper extends SQLiteOpenHelper {
             do {
                 try {
                     JSONObject obj = new JSONObject();
-                    obj.put("_id", c.getString(0));
-                    obj.put("cliente_correo", c.getString(1));
-                    obj.put("cliente_nombre", c.getString(2));
-                    obj.put("cliente_direccion", c.getString(3));
-                    obj.put("cliente_telefono", c.getString(4));
-                    obj.put("items", new JSONArray(c.getString(5)));
-                    obj.put("total", c.getString(6));
-                    obj.put("fecha", c.getString(7));
-                    obj.put("estado", c.getString(8));
-                    obj.put("metodo_pago", c.getString(9));
+                    obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                    obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                    obj.put("cliente_correo", c.getString(c.getColumnIndexOrThrow("cliente_correo")));
+                    obj.put("cliente_nombre", c.getString(c.getColumnIndexOrThrow("cliente_nombre")));
+                    obj.put("cliente_direccion", c.getString(c.getColumnIndexOrThrow("cliente_direccion")));
+                    obj.put("cliente_telefono", c.getString(c.getColumnIndexOrThrow("cliente_telefono")));
+                    obj.put("items", new JSONArray(c.getString(c.getColumnIndexOrThrow("items"))));
+                    obj.put("total", c.getString(c.getColumnIndexOrThrow("total")));
+                    obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
+                    obj.put("estado", c.getString(c.getColumnIndexOrThrow("estado")));
+                    obj.put("metodo_pago", c.getString(c.getColumnIndexOrThrow("metodo_pago")));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (c.moveToNext());
@@ -266,17 +361,18 @@ public class DBHelper extends SQLiteOpenHelper {
             do {
                 try {
                     JSONObject obj = new JSONObject();
-                    obj.put("_id", c.getString(0));
-                    obj.put("cliente_correo", c.getString(1));
-                    obj.put("cliente_nombre", c.getString(2));
-                    obj.put("cliente_direccion", c.getString(3));
-                    obj.put("cliente_telefono", c.getString(4));
-                    obj.put("items", new JSONArray(c.getString(5)));
-                    obj.put("total", c.getString(6));
-                    obj.put("fecha", c.getString(7));
-                    obj.put("estado", c.getString(8));
-                    obj.put("metodo_pago", c.getString(9));
-                    obj.put("farmacias_ids", new JSONArray(c.getString(10)));
+                    obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                    obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                    obj.put("cliente_correo", c.getString(c.getColumnIndexOrThrow("cliente_correo")));
+                    obj.put("cliente_nombre", c.getString(c.getColumnIndexOrThrow("cliente_nombre")));
+                    obj.put("cliente_direccion", c.getString(c.getColumnIndexOrThrow("cliente_direccion")));
+                    obj.put("cliente_telefono", c.getString(c.getColumnIndexOrThrow("cliente_telefono")));
+                    obj.put("items", new JSONArray(c.getString(c.getColumnIndexOrThrow("items"))));
+                    obj.put("total", c.getString(c.getColumnIndexOrThrow("total")));
+                    obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
+                    obj.put("estado", c.getString(c.getColumnIndexOrThrow("estado")));
+                    obj.put("metodo_pago", c.getString(c.getColumnIndexOrThrow("metodo_pago")));
+                    obj.put("farmacias_ids", new JSONArray(c.getString(c.getColumnIndexOrThrow("farmacias_ids"))));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (c.moveToNext());
@@ -288,20 +384,43 @@ public class DBHelper extends SQLiteOpenHelper {
     public void administrarUsuarios(String accion, String[] datos) {
         SQLiteDatabase db = getWritableDatabase();
         if (accion.equals("nuevo")) {
-            db.execSQL("INSERT OR REPLACE INTO usuarios(id, nombres, apellidos, telefono, correo, clave, direccion, alergias, tipo_sangre, enfermedades, foto) VALUES(?,?,?,?,?,?,?,?,?,?,?)", datos);
+            db.execSQL("INSERT OR REPLACE INTO usuarios(id, rev, nombres, apellidos, telefono, correo, clave, direccion, alergias, tipo_sangre, enfermedades, foto) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", datos);
         } else if (accion.equals("modificar")) {
-            db.execSQL("UPDATE usuarios SET nombres=?, apellidos=?, telefono=?, correo=?, clave=?, direccion=?, alergias=?, tipo_sangre=?, enfermedades=?, foto=? WHERE id=?", 
-                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[10], datos[0]});
+            db.execSQL("UPDATE usuarios SET rev=?, nombres=?, apellidos=?, telefono=?, correo=?, clave=?, direccion=?, alergias=?, tipo_sangre=?, enfermedades=?, foto=? WHERE id=?", 
+                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[10], datos[11], datos[0]});
         }
+    }
+
+    public JSONObject obtenerFarmaciaLocal(String id) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT * FROM farmacias WHERE id=?", new String[]{id});
+        if (c.moveToFirst()) {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                obj.put("empresa", c.getString(c.getColumnIndexOrThrow("empresa")));
+                obj.put("direccion", c.getString(c.getColumnIndexOrThrow("direccion")));
+                obj.put("telefono", c.getString(c.getColumnIndexOrThrow("telefono")));
+                obj.put("correo", c.getString(c.getColumnIndexOrThrow("correo")));
+                obj.put("clave", c.getString(c.getColumnIndexOrThrow("clave")));
+                obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
+                obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
+                c.close();
+                return obj;
+            } catch (Exception e) {}
+        }
+        c.close();
+        return null;
     }
 
     public void administrarFarmacias(String accion, String[] datos) {
         SQLiteDatabase db = getWritableDatabase();
         if (accion.equals("nuevo")) {
-            db.execSQL("INSERT OR REPLACE INTO farmacias(id, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?)", datos);
+            db.execSQL("INSERT OR REPLACE INTO farmacias(id, rev, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?,?)", datos);
         } else if (accion.equals("modificar")) {
-            db.execSQL("UPDATE farmacias SET empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=? WHERE id=?", 
-                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[0]});
+            db.execSQL("UPDATE farmacias SET rev=?, empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=? WHERE id=?", 
+                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[0]});
         }
     }
 
@@ -311,27 +430,5 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public Cursor loginFarmacia(String correo, String clave) {
         return getReadableDatabase().rawQuery("SELECT * FROM farmacias WHERE LOWER(correo)=LOWER(?) AND clave=?", new String[]{correo, clave});
-    }
-
-    public JSONObject obtenerFarmaciaLocal(String id) {
-        SQLiteDatabase db = getReadableDatabase();
-        Cursor c = db.rawQuery("SELECT * FROM farmacias WHERE id=?", new String[]{id});
-        if (c.moveToFirst()) {
-            try {
-                JSONObject obj = new JSONObject();
-                obj.put("_id", c.getString(0));
-                obj.put("empresa", c.getString(1));
-                obj.put("direccion", c.getString(2));
-                obj.put("telefono", c.getString(3));
-                obj.put("correo", c.getString(4));
-                obj.put("clave", c.getString(5));
-                obj.put("foto", c.getString(6));
-                obj.put("descripcion", c.getString(7));
-                c.close();
-                return obj;
-            } catch (Exception e) {}
-        }
-        c.close();
-        return null;
     }
 }

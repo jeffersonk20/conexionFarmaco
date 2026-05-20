@@ -131,10 +131,13 @@ public class AdminHomeActivity extends AppCompatActivity {
             mostrarMedicamentos(listaOriginalMedicamentos);
         } else {
             JSONArray filtrados = new JSONArray();
+            String normalizedQuery = Utilidades.normalizar(query);
             for (int i = 0; i < listaOriginalMedicamentos.length(); i++) {
                 try {
                     JSONObject med = listaOriginalMedicamentos.getJSONObject(i);
-                    if (med.getString("nombre").toLowerCase().contains(query.toLowerCase())) {
+                    String nom = Utilidades.normalizar(med.getString("nombre"));
+                    String enf = Utilidades.normalizar(med.optString("enfermedad_objetivo", ""));
+                    if (nom.contains(normalizedQuery) || enf.contains(normalizedQuery)) {
                         filtrados.put(med);
                     }
                 } catch (Exception e) {}
@@ -156,26 +159,10 @@ public class AdminHomeActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
-                if (Utilidades.hayInternet(this)) {
-                    JSONObject selector = new JSONObject();
-                    selector.put("selector", new JSONObject().put("id_farmacia", farmaciaId));
-                    TareaServidor tarea = new TareaServidor();
-                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                    JSONObject resJson = new JSONObject(res);
-                    if (resJson.has("docs")) {
-                        listaOriginalMedicamentos = resJson.getJSONArray("docs");
-                        DBHelper db = new DBHelper(this);
-                        for (int i = 0; i < listaOriginalMedicamentos.length(); i++) 
-                            db.guardarMedicamentoLocal(listaOriginalMedicamentos.getJSONObject(i));
-                        
-                        actualizarListaAdmin();
-                        runOnUiThread(this::actualizarDashboard);
-                        return;
-                    }
-                }
-                // Cache si offline
-                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(null, false);
-                // Filtrar solo los de esta farmacia si el cache es general
+                DBHelper db = new DBHelper(this);
+                
+                // 1. Mostrar siempre lo que hay en cache primero
+                List<JSONObject> cache = db.obtenerMedicamentosCache(null, false);
                 listaOriginalMedicamentos = new JSONArray();
                 for (JSONObject m : cache) {
                     if (m.optString("id_farmacia").equals(farmaciaId)) listaOriginalMedicamentos.put(m);
@@ -183,6 +170,77 @@ public class AdminHomeActivity extends AppCompatActivity {
                 actualizarListaAdmin();
                 runOnUiThread(this::actualizarDashboard);
 
+                // 2. Si hay internet, intentar actualizar
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("id_farmacia", farmaciaId));
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    JSONObject resJson = new JSONObject(res);
+                    
+                    if (resJson.has("docs")) {
+                        JSONArray docsServidor = resJson.getJSONArray("docs");
+                        
+                        // 1. Identificar qué estamos haciendo offline para no borrarlo
+                        List<JSONObject> pendientes = db.obtenerPendientes();
+                        java.util.Set<String> idsEliminando = new java.util.HashSet<>();
+                        java.util.Set<String> idsEditando = new java.util.HashSet<>();
+                        java.util.Set<String> idsAgregando = new java.util.HashSet<>();
+                        
+                        for (JSONObject p : pendientes) {
+                            String pUrl = p.optString("url", "");
+                            String pMetodo = p.optString("metodo", "");
+                            if (!pUrl.contains("medicamentos")) continue;
+                            
+                            String pId = "";
+                            if (pMetodo.equals("POST")) {
+                                try { pId = new JSONObject(p.getString("json")).optString("_id"); } catch(Exception e){}
+                                if (!pId.isEmpty()) idsAgregando.add(pId);
+                            } else {
+                                pId = pUrl.substring(pUrl.lastIndexOf("/") + 1);
+                                if (pId.contains("?")) pId = pId.substring(0, pId.indexOf("?"));
+                                if (pMetodo.equals("DELETE")) idsEliminando.add(pId);
+                                else if (pMetodo.equals("PUT")) idsEditando.add(pId);
+                            }
+                        }
+
+                        // 2. Guardar lo nuevo del servidor
+                        java.util.Set<String> idsEnServidor = new java.util.HashSet<>();
+                        for (int i = 0; i < docsServidor.length(); i++) {
+                            JSONObject doc = docsServidor.getJSONObject(i);
+                            String idS = doc.getString("_id");
+                            idsEnServidor.add(idS);
+                            
+                            if (!idsEliminando.contains(idS) && !idsEditando.contains(idS)) {
+                                db.guardarMedicamentoLocal(doc);
+                            }
+                        }
+
+                        // 3. PURGA: Eliminar del cache local lo que NO está en el servidor 
+                        // Y que no sea algo que acabamos de crear offline
+                        List<JSONObject> cacheLocal = db.obtenerMedicamentosCache(null, false);
+                        for (JSONObject m : cacheLocal) {
+                            if (m.optString("id_farmacia").equals(farmaciaId)) {
+                                String idL = m.optString("_id");
+                                if (!idsEnServidor.contains(idL) && !idsAgregando.contains(idL)) {
+                                    db.eliminarMedicamentoLocal(idL);
+                                }
+                            }
+                        }
+
+                        // 4. Refrescar UI combinada
+                        List<JSONObject> finalCache = db.obtenerMedicamentosCache(null, false);
+                        listaOriginalMedicamentos = new JSONArray();
+                        for (JSONObject m : finalCache) {
+                            if (m.optString("id_farmacia").equals(farmaciaId)) {
+                                listaOriginalMedicamentos.put(m);
+                            }
+                        }
+
+                        actualizarListaAdmin();
+                        runOnUiThread(this::actualizarDashboard);
+                    }
+                }
             } catch (Exception e) {
                 Log.e("AdminHome", "Error carga", e);
             }

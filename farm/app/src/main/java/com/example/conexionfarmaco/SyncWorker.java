@@ -23,10 +23,13 @@ public class SyncWorker extends Worker {
 
         if (pendientes.isEmpty()) return Result.success();
 
+        Log.d("SyncWorker", "Iniciando sincronización de " + pendientes.size() + " elementos");
+
         boolean allSuccess = true;
         for (JSONObject p : pendientes) {
+            String id_local = "";
             try {
-                String id_local = p.getString("id_local");
+                id_local = p.getString("id_local");
                 String url = p.getString("url");
                 String metodo = p.getString("metodo");
                 String json = p.getString("json");
@@ -35,32 +38,76 @@ public class SyncWorker extends Worker {
                 if (tipo.equals("couchdb")) {
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(json, metodo, url).get();
+                    
                     if (res != null) {
                         JSONObject resJson = new JSONObject(res);
-                        if (resJson.optBoolean("ok", false) || res.contains("409") || res.contains("201") || res.contains("200")) {
+                        
+                        boolean esExitoDirecto = resJson.optBoolean("ok", false) || res.contains("201") || res.contains("200");
+                        boolean esRecursoInexistente = res.contains("404") || res.contains("not_found");
+                        boolean esConflicto = res.contains("409") || res.contains("conflict");
+
+                        if (esExitoDirecto || esRecursoInexistente) {
+                            procesarExito(dbHelper, url, metodo, json, resJson);
                             dbHelper.eliminarPendiente(id_local);
+                        } else if (esConflicto && metodo.equals("DELETE")) {
+                            // REINTENTO FORZADO PARA BORRADO: Obtener rev actual y re-intentar
+                            Log.d("SyncWorker", "Conflicto en borrado, intentando forzar...");
+                            String cleanUrl = url.contains("?") ? url.substring(0, url.indexOf("?")) : url;
+                            String getRes = new TareaServidor().execute("", "GET", cleanUrl).get();
+                            JSONObject getJson = new JSONObject(getRes);
+                            if (getJson.has("_rev")) {
+                                String currentRev = getJson.getString("_rev");
+                                String retryUrl = cleanUrl + "?rev=" + currentRev;
+                                String deleteRes = new TareaServidor().execute("", "DELETE", retryUrl).get();
+                                if (deleteRes.contains("\"ok\":true") || deleteRes.contains("200")) {
+                                    dbHelper.eliminarPendiente(id_local);
+                                    Log.d("SyncWorker", "Borrado forzado exitoso");
+                                } else { allSuccess = false; }
+                            } else if (getRes.contains("404")) {
+                                dbHelper.eliminarPendiente(id_local);
+                            }
                         } else {
+                            Log.e("SyncWorker", "Error en tarea: " + res);
                             allSuccess = false;
                         }
-                    } else {
-                        allSuccess = false;
-                    }
+                    } else { allSuccess = false; }
                 } else if (tipo.equals("email")) {
-                    JSONObject emailData = new JSONObject(json);
-                    MailManager mail = new MailManager(
-                            emailData.getString("destinatario"),
-                            emailData.getString("asunto"),
-                            emailData.getString("contenido")
-                    );
-                    mail.execute();
-                    dbHelper.eliminarPendiente(id_local);
+                    enviarEmail(dbHelper, id_local, json);
                 }
             } catch (Exception e) {
-                Log.e("SyncWorker", "Error: " + e.getMessage());
+                Log.e("SyncWorker", "Fallo crítico: " + e.getMessage());
                 allSuccess = false;
             }
         }
-
         return allSuccess ? Result.success() : Result.retry();
+    }
+
+    private void procesarExito(DBHelper dbHelper, String url, String metodo, String json, JSONObject resJson) throws Exception {
+        if (resJson.has("rev") && !json.isEmpty() && (metodo.equals("POST") || metodo.equals("PUT"))) {
+            JSONObject localObj = new JSONObject(json);
+            String id_couch = localObj.optString("_id", "");
+            String nuevo_rev = resJson.getString("rev");
+            localObj.put("_rev", nuevo_rev);
+            
+            if (url.contains("medicamentos")) {
+                dbHelper.guardarMedicamentoLocal(localObj);
+            } else if (url.contains("pedidos")) {
+                dbHelper.guardarPedidoLocal(localObj);
+            }
+            if (!id_couch.isEmpty()) {
+                dbHelper.actualizarRevEnPendientes(id_couch, nuevo_rev);
+            }
+        }
+    }
+
+    private void enviarEmail(DBHelper dbHelper, String id_local, String json) throws Exception {
+        JSONObject emailData = new JSONObject(json);
+        MailManager mail = new MailManager(
+                emailData.getString("destinatario"),
+                emailData.getString("asunto"),
+                emailData.getString("contenido")
+        );
+        mail.enviarSincrono();
+        dbHelper.eliminarPendiente(id_local);
     }
 }

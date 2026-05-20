@@ -189,7 +189,7 @@ public class AdminRegistroActivity extends AppCompatActivity {
 
                 DBHelper dbHelper = new DBHelper(this);
                 // Guardar localmente con la imagen en Base64 para que sea visible offline
-                dbHelper.administrarFarmacias("nuevo", new String[]{id, emp, dir, tel, cor, cla, base64Foto, des});
+                dbHelper.administrarFarmacias("nuevo", new String[]{id, "", emp, dir, tel, cor, cla, base64Foto, des});
 
                 if (Utilidades.hayInternet(this)) {
                     TareaServidor tarea = new TareaServidor();

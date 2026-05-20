@@ -170,26 +170,41 @@ public class HistorialPedidosActivity extends AppCompatActivity {
     private void actualizarPedido(JSONObject pedido) {
         new Thread(() -> {
             try {
-                // Para actualizar en CouchDB necesitamos la URL con el ID: /pedidos/id
-                String urlUpdate = Utilidades.url_pedidos + "/" + pedido.getString("_id");
-                
-                TareaServidor tarea = new TareaServidor();
-                // Usamos PUT para actualizar un documento específico
-                String res = tarea.execute(pedido.toString(), "PUT", urlUpdate).get();
-                
+                String id = pedido.getString("_id");
+                String urlUpdate = Utilidades.url_pedidos + "/" + id;
+                DBHelper db = new DBHelper(this);
+
+                // 1. Guardar localmente siempre
+                db.guardarPedidoLocal(pedido);
+
+                if (Utilidades.hayInternet(this)) {
+                    TareaServidor tarea = new TareaServidor();
+                    String res = tarea.execute(pedido.toString(), "PUT", urlUpdate).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.optBoolean("ok", false)) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Pedido actualizado en la nube", Toast.LENGTH_SHORT).show();
+                            cargarHistorial();
+                        });
+                        return;
+                    }
+                }
+
+                // Si no hay internet o falló el servidor, encolar
+                db.agregarPendiente(urlUpdate, "PUT", pedido.toString(), "couchdb");
+                Utilidades.sincronizar(this);
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Pedido actualizado con éxito", Toast.LENGTH_SHORT).show();
-                    btnGuardarOcultar();
+                    Toast.makeText(this, "Cambios guardados localmente. Sincronización pendiente.", Toast.LENGTH_SHORT).show();
                     cargarHistorial();
                 });
+
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Error al actualizar", Toast.LENGTH_SHORT).show());
+                Log.e("Historial", "Error actualizando", e);
             }
         }).start();
     }
 
     private void btnGuardarOcultar() {
-        // Simple recarga para ocultar botones de guardar
     }
 
     private void cancelarPedido(JSONObject pedido) {
@@ -204,23 +219,25 @@ public class HistorialPedidosActivity extends AppCompatActivity {
                 // 2. Refrescar la interfaz para que desaparezca YA
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Reserva cancelada localmente", Toast.LENGTH_SHORT).show();
-                    cargarHistorial(); // Esto recargará la lista desde el SQLite ya sin el pedido
+                    cargarHistorial();
                 });
 
+                String urlDelete = Utilidades.url_pedidos + "/" + id + "?rev=" + pedido.optString("_rev", "");
+
                 if (Utilidades.hayInternet(this)) {
-                    // 3a. Con internet: Sincronizar borrado con CouchDB
-                    pedido.put("_deleted", true);
-                    String urlDelete = Utilidades.url_pedidos + "/" + id;
                     TareaServidor tarea = new TareaServidor();
-                    tarea.execute(pedido.toString(), "PUT", urlDelete).get();
-                    Log.d("Historial", "Pedido eliminado en la nube");
-                } else {
-                    // 3b. Sin internet: Encolar para el WorkManager
-                    pedido.put("_deleted", true);
-                    String urlDelete = Utilidades.url_pedidos + "/" + id;
-                    db.agregarPendiente(urlDelete, "PUT", pedido.toString(), "couchdb");
-                    Log.d("Historial", "Borrado encolado para sincronización posterior");
+                    String res = tarea.execute("", "DELETE", urlDelete).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.optBoolean("ok", false)) {
+                        Log.d("Historial", "Pedido eliminado en la nube");
+                        return;
+                    }
                 }
+
+                // 3b. Sin internet o falló el server: Encolar para el WorkManager
+                db.agregarPendiente(urlDelete, "DELETE", "", "couchdb");
+                Utilidades.sincronizar(this);
+                Log.d("Historial", "Borrado encolado para sincronización posterior");
             } catch (Exception e) {
                 Log.e("Historial", "Error al cancelar", e);
             }

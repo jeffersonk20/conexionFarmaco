@@ -88,6 +88,7 @@ public class AdminFacturacionActivity extends AppCompatActivity {
                     JSONObject resJson = new JSONObject(res);
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
+                        db.limpiarPedidosFarmacia(farmaciaId);
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarPedidoLocal(docs.getJSONObject(i));
                         }

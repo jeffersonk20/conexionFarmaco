@@ -36,26 +36,14 @@ public class LoginActivity extends AppCompatActivity {
 
     private void loginBiometrico() {
         androidx.biometric.BiometricManager biometricManager = androidx.biometric.BiometricManager.from(this);
-        switch (biometricManager.canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG | androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)) {
-            case androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS:
-                break;
-            case androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE:
-                mostrar("Este dispositivo no tiene sensor biométrico");
-                return;
-            case androidx.biometric.BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE:
-                mostrar("El sensor biométrico no está disponible");
-                return;
-            case androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED:
-                mostrar("No tienes huellas registradas en tu equipo");
-                return;
-            default:
-                mostrar("Error desconocido en biometría");
-                return;
+        if (biometricManager.canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG | androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL) != androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
+            mostrar("Biometría no disponible o no configurada");
+            return;
         }
 
         String lastUser = getSharedPreferences("UserPrefs", MODE_PRIVATE).getString("lastUserData", "");
         if (lastUser.isEmpty()) {
-            mostrar("Debe ingresar con contraseña la primera vez para activar la huella");
+            mostrar("Ingrese con contraseña primero para activar huella");
             return;
         }
 
@@ -63,35 +51,16 @@ public class LoginActivity extends AppCompatActivity {
         BiometricPrompt biometricPrompt = new BiometricPrompt(LoginActivity.this,
                 executor, new BiometricPrompt.AuthenticationCallback() {
             @Override
-            public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
-                super.onAuthenticationError(errorCode, errString);
-                // Si el error es porque el usuario canceló, no mostrar nada molesto
-                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                    mostrar("Error de autenticación: " + errString);
-                }
-            }
-
-            @Override
             public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                 super.onAuthenticationSucceeded(result);
                 try {
-                    JSONObject userDoc = new JSONObject(lastUser);
-                    entrar(userDoc, false);
-                } catch (Exception e) {
-                    mostrar("Error al recuperar sesión");
-                }
-            }
-
-            @Override
-            public void onAuthenticationFailed() {
-                super.onAuthenticationFailed();
-                mostrar("Huella no reconocida");
+                    entrar(new JSONObject(lastUser), false);
+                } catch (Exception e) { mostrar("Error al entrar"); }
             }
         });
 
         BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
                 .setTitle("Ingreso Rápido")
-                .setSubtitle("Use su huella digital para entrar")
                 .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG | androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
                 .build();
 
@@ -99,8 +68,8 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void loginNube() {
-        String cor = txtCorreo.getText().toString();
-        String cla = txtClave.getText().toString();
+        String cor = txtCorreo.getText().toString().trim();
+        String cla = txtClave.getText().toString().trim();
 
         if (cor.isEmpty() || cla.isEmpty()) {
             mostrar("Ingrese sus credenciales");
@@ -112,104 +81,89 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        try {
-            JSONObject selector = new JSONObject();
-            JSONObject query = new JSONObject();
-            query.put("correo", cor);
-            query.put("clave", cla);
-            selector.put("selector", query);
-            selector.put("limit", 1);
+        new Thread(() -> {
+            try {
+                JSONObject selector = new JSONObject();
+                selector.put("selector", new JSONObject().put("correo", cor).put("clave", cla));
+                
+                TareaServidor tarea = new TareaServidor();
+                String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
+                JSONObject resJson = new JSONObject(respuesta);
 
-            TareaServidor tarea = new TareaServidor();
-            String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
-            
-            JSONObject resJson = new JSONObject(respuesta);
-            if (resJson.has("docs")) {
-                JSONArray docs = resJson.getJSONArray("docs");
-                if (docs.length() > 0) {
-                    JSONObject userDoc = docs.getJSONObject(0);
-                    entrar(userDoc, true); // true = guardar en local
+                if (resJson.has("docs") && resJson.getJSONArray("docs").length() > 0) {
+                    JSONObject userDoc = resJson.getJSONArray("docs").getJSONObject(0);
+                    userDoc.put("clave", cla); // Guardar clave para uso offline
+                    entrar(userDoc, true);
                 } else {
-                    // Si no está en la nube, probar local por si acaso se registró offline
                     loginLocal(cor, cla);
                 }
-            } else {
+            } catch (Exception e) {
                 loginLocal(cor, cla);
             }
-
-        } catch (Exception e) {
-            loginLocal(cor, cla);
-        }
+        }).start();
     }
 
     private void loginLocal(String cor, String cla) {
         DBHelper db = new DBHelper(this);
         android.database.Cursor cursor = db.login(cor, cla);
-        if (cursor.moveToFirst()) {
+        if (cursor != null && cursor.moveToFirst()) {
             try {
                 JSONObject userDoc = new JSONObject();
-                userDoc.put("_id", cursor.getString(0));
-                userDoc.put("nombres", cursor.getString(1));
-                userDoc.put("apellidos", cursor.getString(2));
-                userDoc.put("telefono", cursor.getString(3));
-                userDoc.put("correo", cursor.getString(4));
-                userDoc.put("clave", cursor.getString(5));
-                userDoc.put("direccion", cursor.getString(6));
-                userDoc.put("alergias", cursor.getString(7));
-                userDoc.put("tipo_sangre", cursor.getString(8));
-                userDoc.put("enfermedades", cursor.getString(9));
-                userDoc.put("foto", cursor.getString(10));
-                
-                entrar(userDoc, false); // false = no re-guardar
+                userDoc.put("_id", cursor.getString(cursor.getColumnIndexOrThrow("id")));
+                userDoc.put("_rev", cursor.getString(cursor.getColumnIndexOrThrow("rev")));
+                userDoc.put("nombres", cursor.getString(cursor.getColumnIndexOrThrow("nombres")));
+                userDoc.put("apellidos", cursor.getString(cursor.getColumnIndexOrThrow("apellidos")));
+                userDoc.put("telefono", cursor.getString(cursor.getColumnIndexOrThrow("telefono")));
+                userDoc.put("correo", cursor.getString(cursor.getColumnIndexOrThrow("correo")));
+                userDoc.put("clave", cursor.getString(cursor.getColumnIndexOrThrow("clave")));
+                userDoc.put("direccion", cursor.getString(cursor.getColumnIndexOrThrow("direccion")));
+                userDoc.put("alergias", cursor.getString(cursor.getColumnIndexOrThrow("alergias")));
+                userDoc.put("tipo_sangre", cursor.getString(cursor.getColumnIndexOrThrow("tipo_sangre")));
+                userDoc.put("enfermedades", cursor.getString(cursor.getColumnIndexOrThrow("enfermedades")));
+                userDoc.put("foto", cursor.getString(cursor.getColumnIndexOrThrow("foto")));
+                cursor.close();
+                entrar(userDoc, false);
             } catch (Exception e) {
-                mostrar("Error local: " + e.getMessage());
+                runOnUiThread(() -> mostrar("Error local: " + e.getMessage()));
             }
         } else {
-            mostrar("Usuario no registrado en este equipo o credenciales incorrectas");
+            runOnUiThread(() -> mostrar("Usuario no encontrado localmente"));
         }
-        cursor.close();
     }
 
     private void entrar(JSONObject userDoc, boolean guardarEnLocal) throws Exception {
-        String nombre = userDoc.getString("nombres");
         String id = userDoc.getString("_id");
+        String nombre = userDoc.getString("nombres");
         
-        // Guardar datos en Preferences para la sesión actual
         getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
                 .putString("userData", userDoc.toString())
-                .putString("lastUserData", userDoc.toString()) // Nueva clave persistente para biometría
+                .putString("lastUserData", userDoc.toString())
                 .apply();
 
         if (guardarEnLocal) {
             DBHelper db = new DBHelper(this);
-            String clave = userDoc.optString("clave", txtClave.getText().toString());
-            
-            // Asegurar persistencia completa de todos los campos
-            db.getWritableDatabase().execSQL("INSERT OR REPLACE INTO usuarios(id, nombres, apellidos, telefono, correo, clave, direccion, alergias, tipo_sangre, enfermedades, foto) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                    new String[]{
-                            id, 
-                            nombre, 
-                            userDoc.optString("apellidos", ""), 
-                            userDoc.optString("telefono", ""), 
-                            userDoc.optString("correo", ""), 
-                            clave, 
-                            userDoc.optString("direccion", ""), 
-                            userDoc.optString("alergias", ""), 
-                            userDoc.optString("tipo_sangre", ""), 
-                            userDoc.optString("enfermedades", ""), 
-                            userDoc.optString("foto", "")
-                    });
+            db.administrarUsuarios("nuevo", new String[]{
+                    id,
+                    userDoc.optString("_rev", ""),
+                    nombre,
+                    userDoc.optString("apellidos", ""),
+                    userDoc.optString("telefono", ""),
+                    userDoc.optString("correo", ""),
+                    userDoc.optString("clave", ""),
+                    userDoc.optString("direccion", ""),
+                    userDoc.optString("alergias", ""),
+                    userDoc.optString("tipo_sangre", ""),
+                    userDoc.optString("enfermedades", ""),
+                    userDoc.optString("foto", "")
+            });
         }
 
-        mostrar("Bienvenido " + nombre);
-        
-        Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
-        startActivity(intent);
-        finish();
+        runOnUiThread(() -> {
+            Toast.makeText(this, "¡Bienvenido " + nombre + "!", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, HomeActivity.class));
+            finish();
+        });
     }
-
-
-
 
     private void mostrar(String m) {
         Toast.makeText(this, m, Toast.LENGTH_SHORT).show();

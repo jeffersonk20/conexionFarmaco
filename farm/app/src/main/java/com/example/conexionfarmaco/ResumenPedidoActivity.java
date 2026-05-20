@@ -139,6 +139,7 @@ public class ResumenPedidoActivity extends AppCompatActivity {
                     // Si no hay internet o falló el server, ya está en pedidos local,
                     // pero necesitamos que se sincronice luego
                     dbHelper.agregarPendiente(Utilidades.url_pedidos, "POST", pedido.toString(), "couchdb");
+                    Utilidades.sincronizar(this);
                     finalizarExitosamente(pedido, true);
 
                 } catch (Exception e) {

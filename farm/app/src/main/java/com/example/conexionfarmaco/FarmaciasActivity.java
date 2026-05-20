@@ -51,9 +51,13 @@ public class FarmaciasActivity extends AppCompatActivity {
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
                         DBHelper db = new DBHelper(this);
+                        db.limpiarFarmaciasCache();
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarFarmaciaCache(docs.getJSONObject(i));
                         }
+                        // Limpiar medicamentos que pertenecían a farmacias borradas
+                        db.limpiarDatosHuerfanos();
+
                         runOnUiThread(() -> mostrarFarmacias(docs));
                         return;
                     }

@@ -147,7 +147,9 @@ public class AdminPerfilActivity extends AppCompatActivity {
 
             DBHelper db = new DBHelper(this);
             db.administrarFarmacias("modificar", new String[]{
-                    farmaciaId, nom, dir, tel, 
+                    farmaciaId,
+                    farmaciaActual.optString("_rev", ""),
+                    nom, dir, tel, 
                     farmaciaActual.optString("correo", ""),
                     farmaciaActual.optString("clave", ""),
                     farmaciaActual.optString("foto", ""),
@@ -188,6 +190,7 @@ public class AdminPerfilActivity extends AppCompatActivity {
                         farmaciaActual = resJson.getJSONArray("docs").getJSONObject(0);
                         db.administrarFarmacias("modificar", new String[]{
                                 farmaciaId,
+                                farmaciaActual.optString("_rev", ""),
                                 farmaciaActual.getString("empresa"),
                                 farmaciaActual.optString("direccion", ""),
                                 farmaciaActual.optString("telefono", ""),

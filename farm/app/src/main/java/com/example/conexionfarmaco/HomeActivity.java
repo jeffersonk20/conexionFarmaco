@@ -126,13 +126,27 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Refrescar promociones por si el admin hizo cambios offline
+        cargarPromociones();
+        // Intentar sincronizar lo pendiente
+        Utilidades.sincronizar(this);
+    }
+
     private void cargarDatosUsuario() {
         try {
-            String userData = getSharedPreferences("UserPrefs", MODE_PRIVATE).getString("userData", "");
-            if (!userData.isEmpty()) {
-                JSONObject user = new JSONObject(userData);
+            String userDataStr = getSharedPreferences("UserPrefs", MODE_PRIVATE).getString("userData", "");
+            if (!userDataStr.isEmpty()) {
+                JSONObject user = new JSONObject(userDataStr);
                 userEnfermedades = user.optString("enfermedades", "Ninguna");
                 userAlergias = user.optString("alergias", "");
+                
+                // Si enfermedades es un tipo de sangre (error viejo), intentar limpiar
+                if (userEnfermedades.contains("+") || userEnfermedades.contains("-")) {
+                    userEnfermedades = "Ninguna";
+                }
             }
         } catch (Exception e) {
             Log.e("HomeAct", "Error loading user data", e);
@@ -173,12 +187,15 @@ public class HomeActivity extends AppCompatActivity {
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
                         DBHelper db = new DBHelper(this);
+                        db.limpiarMedicamentosPromocion();
                         for (int i = 0; i < docs.length(); i++) {
                             JSONObject med = docs.getJSONObject(i);
                             db.guardarMedicamentoLocal(med);
                         }
                         
-                        runOnUiThread(() -> mostrarListaMedicamentos(docs, containerPromociones));
+                        // RECARGAR desde el cache local (que ya tiene el ESCUDO de protección)
+                        List<JSONObject> promosProtegidas = db.obtenerMedicamentosCache(null, true);
+                        runOnUiThread(() -> mostrarListaMedicamentos(new JSONArray(promosProtegidas), containerPromociones));
                         return;
                     }
                 }
@@ -204,12 +221,15 @@ public class HomeActivity extends AppCompatActivity {
     private void buscarMedicamentos(String query) {
         new Thread(() -> {
             try {
-                // Limpiar query de puntos, comas y espacios extra (especialmente para voz)
+                DBHelper db = new DBHelper(this);
                 String cleanQuery = query.toLowerCase().replaceAll("[.,]", "").trim();
                 
+                // 1. Carga inmediata desde el cache local (Soporte Offline Total)
+                List<JSONObject> cacheResults = db.obtenerMedicamentosCache(cleanQuery, false);
+                runOnUiThread(() -> mostrarResultadosBusqueda(new JSONArray(cacheResults)));
+
+                // 2. Si hay internet, intentar buscar en la nube para actualizar
                 if (Utilidades.hayInternet(this)) {
-                    // Normalización extrema para CouchDB: 
-                    // Cada vocal en la búsqueda se convierte en un grupo [vocal_con_sin_tilde]
                     String regexQuery = "(?i).*" + cleanQuery
                             .replaceAll("[aáàä]", "[aáàä]")
                             .replaceAll("[eéèë]", "[eéèë]")
@@ -218,7 +238,6 @@ public class HomeActivity extends AppCompatActivity {
                             .replaceAll("[uúùü]", "[uúùü]") + ".*";
                     
                     JSONObject selector = new JSONObject();
-                    // Buscamos en múltiples campos para mayor efectividad
                     JSONArray orArray = new JSONArray();
                     orOrArray(orArray, "nombre", regexQuery);
                     orOrArray(orArray, "presentacion", regexQuery);
@@ -228,17 +247,16 @@ public class HomeActivity extends AppCompatActivity {
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);
+                    
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
-                        DBHelper db = new DBHelper(this);
                         for (int i = 0; i < docs.length(); i++) db.guardarMedicamentoCache(docs.getJSONObject(i));
-                        runOnUiThread(() -> mostrarResultadosBusqueda(docs));
-                        return;
+                        
+                        // RECARGAR desde el cache local (que ya tiene el ESCUDO de protección)
+                        List<JSONObject> finalResults = db.obtenerMedicamentosCache(cleanQuery, false);
+                        runOnUiThread(() -> mostrarResultadosBusqueda(new JSONArray(finalResults)));
                     }
                 }
-                // Cache si offline (el DBHelper ya maneja la flexibilidad con cleanQuery)
-                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(cleanQuery, false);
-                runOnUiThread(() -> mostrarResultadosBusqueda(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("HomeAct", "Error busqueda", e);
             }

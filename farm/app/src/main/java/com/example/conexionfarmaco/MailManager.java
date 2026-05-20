@@ -38,8 +38,7 @@ public class MailManager extends AsyncTask<Void, Void, Void> {
                 "</div>";
     }
 
-    @Override
-    protected Void doInBackground(Void... voids) {
+    public void enviarSincrono() {
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.starttls.enable", "true");
@@ -60,6 +59,15 @@ public class MailManager extends AsyncTask<Void, Void, Void> {
             message.setContent(contentHtml, "text/html; charset=utf-8");
             Transport.send(message);
         } catch (MessagingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    protected Void doInBackground(Void... voids) {
+        try {
+            enviarSincrono();
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return null;

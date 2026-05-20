@@ -41,15 +41,21 @@ public class Utilidades {
     }
 
     public static void sincronizar(Context context) {
+        androidx.work.Constraints constraints = new androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                .build();
+
         androidx.work.OneTimeWorkRequest syncRequest =
                 new androidx.work.OneTimeWorkRequest.Builder(SyncWorker.class)
-                        .setConstraints(new androidx.work.Constraints.Builder()
-                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                .build())
+                        .setConstraints(constraints)
                         .build();
 
-        androidx.work.WorkManager.getInstance(context).enqueue(syncRequest);
-        Log.d("Sync", "Tarea de sincronización encolada");
+        androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                "SincronizacionUnica",
+                androidx.work.ExistingWorkPolicy.REPLACE,
+                syncRequest
+        );
+        Log.d("Sync", "Tarea de sincronización encolada (Única)");
     }
 
     public static String getEstadoPedidoColor(String estado) {
@@ -62,6 +68,13 @@ public class Utilidades {
         }
     }
 
+
+    public static String normalizar(String texto) {
+        if (texto == null) return "";
+        return java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .toLowerCase();
+    }
 
     public static void cargarImagenBase64(String base64, ImageView iv) {
         if (base64 == null || base64.isEmpty()) return;

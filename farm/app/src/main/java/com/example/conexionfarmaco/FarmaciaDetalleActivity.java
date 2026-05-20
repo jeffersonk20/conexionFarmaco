@@ -81,7 +81,16 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarMedicamentoLocal(docs.getJSONObject(i));
                         }
-                        runOnUiThread(() -> mostrarMedicamentos(docs));
+                        
+                        // RECARGAR desde el cache local (que ya tiene el ESCUDO is_deleted)
+                        java.util.List<JSONObject> finalCache = db.obtenerMedicamentosCache(null, false);
+                        JSONArray filtrados = new JSONArray();
+                        for (JSONObject med : finalCache) {
+                            if (med.optString("id_farmacia").equals(farmaciaId)) {
+                                filtrados.put(med);
+                            }
+                        }
+                        runOnUiThread(() -> mostrarMedicamentos(filtrados));
                         return;
                     }
                 }

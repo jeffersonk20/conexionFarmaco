@@ -83,7 +83,25 @@ public class PerfilActivity extends AppCompatActivity {
         cargarHistorial();
 
         if (btnCambiarFoto != null) btnCambiarFoto.setOnClickListener(v -> elegirImagen());
-        if (btnCerrarSesion != null) btnCerrarSesion.setOnClickListener(v -> cerrarSesion());
+        if (btnCerrarSesion != null) {
+            btnCerrarSesion.setOnClickListener(v -> cerrarSesion());
+            
+            // Función secreta de limpieza profunda (Mantener presionado)
+            btnCerrarSesion.setOnLongClickListener(v -> {
+                new AlertDialog.Builder(this)
+                        .setTitle("Limpieza de Caché")
+                        .setMessage("¿Deseas borrar todos los datos locales y cerrar sesión? Esto eliminará cualquier dato fantasma.")
+                        .setPositiveButton("Sí, limpiar todo", (dialog, which) -> {
+                            DBHelper db = new DBHelper(this);
+                            db.getWritableDatabase().execSQL("DELETE FROM medicamentos");
+                            db.getWritableDatabase().execSQL("DELETE FROM farmacias");
+                            cerrarSesion();
+                        })
+                        .setNegativeButton("Cancelar", null)
+                        .show();
+                return true;
+            });
+        }
         if (btnEditarDatos != null) btnEditarDatos.setOnClickListener(v -> mostrarDialogoEditar());
         if (btnAgregarDireccion != null) btnAgregarDireccion.setOnClickListener(v -> mostrarDialogoDireccion());
     }
@@ -285,6 +303,7 @@ public class PerfilActivity extends AppCompatActivity {
             // Actualizar localmente siempre para que persista offline
             dbHelper.administrarUsuarios("modificar", new String[]{
                     id,
+                    userData.optString("_rev", ""),
                     userData.optString("nombres"),
                     userData.optString("apellidos"),
                     userData.optString("telefono"),
@@ -361,6 +380,7 @@ public class PerfilActivity extends AppCompatActivity {
                             DBHelper db = new DBHelper(this);
                             db.administrarUsuarios("modificar", new String[]{
                                     userData.getString("_id"),
+                                    userData.optString("_rev", ""),
                                     userData.getString("nombres"),
                                     userData.getString("apellidos"),
                                     userData.getString("telefono"),

@@ -21,6 +21,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONObject;
+import java.util.List;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
@@ -222,6 +223,10 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                     JSONObject resJson = new JSONObject(res);
                     
                     if (resJson.optBoolean("ok", false)) {
+                        // Actualizar el _rev local con el que devolvió el servidor
+                        json.put("_rev", resJson.getString("rev"));
+                        dbHelper.guardarMedicamentoLocal(json);
+
                         runOnUiThread(() -> {
                             Toast.makeText(this, "Guardado correctamente", Toast.LENGTH_SHORT).show();
                             finish();
@@ -232,6 +237,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
 
                 // Si no hay internet o falló el servidor, agregar a pendientes
                 dbHelper.agregarPendiente(url, metodo, json.toString(), "couchdb");
+                Utilidades.sincronizar(this);
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Guardado localmente. Se sincronizará al conectar.", Toast.LENGTH_SHORT).show();
                     finish();
@@ -254,11 +260,28 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 new Thread(() -> {
                     try {
                         String id = medEdicion.getString("_id");
-                        String rev = medEdicion.getString("_rev");
-                        String url = Utilidades.url_medicamentos + "/" + id + "?rev=" + rev;
+                        String rev = medEdicion.optString("_rev", "");
                         
                         DBHelper dbHelper = new DBHelper(this);
                         dbHelper.eliminarMedicamentoLocal(id);
+                        
+                        // Si no tiene revisión, es un documento que se creó offline y nunca se subió.
+                        // En este caso, simplemente buscamos si hay un pendiente de creación y lo borramos.
+                        if (rev.isEmpty()) {
+                            List<JSONObject> pendientes = dbHelper.obtenerPendientes();
+                            for (JSONObject p : pendientes) {
+                                if (p.getString("url").contains(id)) {
+                                    dbHelper.eliminarPendiente(p.getString("id_local"));
+                                }
+                            }
+                            runOnUiThread(() -> {
+                                Toast.makeText(this, "Eliminado (cancelado offline)", Toast.LENGTH_SHORT).show();
+                                finish();
+                            });
+                            return;
+                        }
+
+                        String url = Utilidades.url_medicamentos + "/" + id + "?rev=" + rev;
                         
                         if (Utilidades.hayInternet(this)) {
                             TareaServidor tarea = new TareaServidor();
@@ -276,6 +299,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
 
                         // Si no hay internet o falló el servidor, agregar a pendientes
                         dbHelper.agregarPendiente(url, "DELETE", "", "couchdb");
+                        Utilidades.sincronizar(this);
                         runOnUiThread(() -> {
                             Toast.makeText(this, "Eliminado localmente. Se sincronizará al conectar.", Toast.LENGTH_SHORT).show();
                             finish();
@@ -283,18 +307,8 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                         
                     } catch (Exception e) {
                         Log.e("AdminMed", "Error delete", e);
-                        try {
-                            String id = medEdicion.getString("_id");
-                            DBHelper db = new DBHelper(this);
-                            db.eliminarMedicamentoLocal(id);
-                            // Intentar agregar a pendientes incluso si falló el bloque try principal
-                            String rev = medEdicion.getString("_rev");
-                            String url = Utilidades.url_medicamentos + "/" + id + "?rev=" + rev;
-                            db.agregarPendiente(url, "DELETE", "", "couchdb");
-                        } catch (Exception ex) {}
-                        
                         runOnUiThread(() -> {
-                            Toast.makeText(this, "Eliminado localmente. Sincronización pendiente.", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Error al eliminar", Toast.LENGTH_SHORT).show();
                             finish();
                         });
                     }

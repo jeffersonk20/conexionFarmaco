@@ -30,7 +30,8 @@ public class TareaServidor extends AsyncTask<String, String, String> {
             connection.setConnectTimeout(10000); // 10 segundos de espera
             connection.setReadTimeout(10000);
 
-            if (!metodo.equals("GET")) {
+            // Solo enviar cuerpo si no es GET y si hay datos reales que enviar
+            if (!metodo.equals("GET") && jsonDatos != null && !jsonDatos.isEmpty()) {
                 connection.setDoOutput(true);
                 Writer writer = new BufferedWriter(new OutputStreamWriter(connection.getOutputStream(), "UTF-8"));
                 writer.write(jsonDatos);

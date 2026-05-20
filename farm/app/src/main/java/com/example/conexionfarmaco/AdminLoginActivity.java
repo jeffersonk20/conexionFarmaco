@@ -45,14 +45,15 @@ public class AdminLoginActivity extends AppCompatActivity {
         if (cursor != null && cursor.moveToFirst()) {
             try {
                 JSONObject farmDoc = new JSONObject();
-                farmDoc.put("_id", cursor.getString(0));
-                farmDoc.put("empresa", cursor.getString(1));
-                farmDoc.put("direccion", cursor.getString(2));
-                farmDoc.put("telefono", cursor.getString(3));
-                farmDoc.put("correo", cursor.getString(4));
-                farmDoc.put("clave", cursor.getString(5));
-                farmDoc.put("foto", cursor.getString(6));
-                farmDoc.put("descripcion", cursor.getString(7));
+                farmDoc.put("_id", cursor.getString(cursor.getColumnIndexOrThrow("id")));
+                farmDoc.put("_rev", cursor.getString(cursor.getColumnIndexOrThrow("rev")));
+                farmDoc.put("empresa", cursor.getString(cursor.getColumnIndexOrThrow("empresa")));
+                farmDoc.put("direccion", cursor.getString(cursor.getColumnIndexOrThrow("direccion")));
+                farmDoc.put("telefono", cursor.getString(cursor.getColumnIndexOrThrow("telefono")));
+                farmDoc.put("correo", cursor.getString(cursor.getColumnIndexOrThrow("correo")));
+                farmDoc.put("clave", cursor.getString(cursor.getColumnIndexOrThrow("clave")));
+                farmDoc.put("foto", cursor.getString(cursor.getColumnIndexOrThrow("foto")));
+                farmDoc.put("descripcion", cursor.getString(cursor.getColumnIndexOrThrow("descripcion")));
                 cursor.close();
                 Log.d("AdminLogin", "Login local exitoso para: " + cor);
                 entrar(farmDoc, false);
@@ -73,41 +74,31 @@ public class AdminLoginActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
-                // CouchDB selector (Suele ser sensible a mayúsculas, enviamos tal cual)
                 JSONObject query = new JSONObject();
                 query.put("correo", cor);
                 query.put("clave", cla);
                 
                 JSONObject selector = new JSONObject();
                 selector.put("selector", query);
-                selector.put("limit", 1);
 
                 TareaServidor tarea = new TareaServidor();
                 String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
                 
-                if (respuesta == null || respuesta.isEmpty()) {
-                    runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Servidor no responde", Toast.LENGTH_SHORT).show());
-                    return;
-                }
-
                 JSONObject resJson = new JSONObject(respuesta);
                 if (resJson.has("docs")) {
                     JSONArray docs = resJson.getJSONArray("docs");
                     if (docs.length() > 0) {
                         JSONObject farmDoc = docs.getJSONObject(0);
-                        // Muy importante: Guardar la clave que funcionó para el acceso offline
+                        // Asegurar que la clave se guarde para acceso offline
                         farmDoc.put("clave", cla);
                         entrar(farmDoc, true);
                     } else {
-                        runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Correo o contraseña de empresa incorrectos", Toast.LENGTH_SHORT).show());
+                        runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Credenciales incorrectas", Toast.LENGTH_SHORT).show());
                     }
-                } else {
-                    runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Error en la respuesta del servidor", Toast.LENGTH_SHORT).show());
                 }
-
             } catch (Exception e) {
-                Log.e("AdminLogin", "Error en login por internet", e);
-                runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Error de red: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                Log.e("AdminLogin", "Error online", e);
+                runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Error de red", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
@@ -116,7 +107,6 @@ public class AdminLoginActivity extends AppCompatActivity {
         String id = farmDoc.getString("_id");
         String nombre = farmDoc.getString("empresa");
 
-        // Guardar sesión admin en Preferences
         SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
         editor.putString("farmaciaId", id);
         editor.putString("farmaciaNombre", nombre);
@@ -124,25 +114,22 @@ public class AdminLoginActivity extends AppCompatActivity {
 
         if (guardarEnLocal) {
             DBHelper db = new DBHelper(this);
-            String clave = farmDoc.optString("clave", "");
-            
-            db.getWritableDatabase().execSQL("INSERT OR REPLACE INTO farmacias(id, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?)",
-                    new String[]{
-                            id, 
-                            nombre, 
-                            farmDoc.optString("direccion", ""), 
-                            farmDoc.optString("telefono", ""), 
-                            farmDoc.optString("correo", ""), 
-                            clave, 
-                            farmDoc.optString("foto", ""), 
-                            farmDoc.optString("descripcion", "")
-                    });
+            db.administrarFarmacias("nuevo", new String[]{
+                    id,
+                    farmDoc.optString("_rev", ""),
+                    nombre,
+                    farmDoc.optString("direccion", ""),
+                    farmDoc.optString("telefono", ""),
+                    farmDoc.optString("correo", ""),
+                    farmDoc.optString("clave", ""),
+                    farmDoc.optString("foto", ""),
+                    farmDoc.optString("descripcion", "")
+            });
         }
 
         runOnUiThread(() -> {
             Toast.makeText(AdminLoginActivity.this, "¡Bienvenido " + nombre + "!", Toast.LENGTH_SHORT).show();
-            Intent intent = new Intent(AdminLoginActivity.this, AdminHomeActivity.class);
-            startActivity(intent);
+            startActivity(new Intent(AdminLoginActivity.this, AdminHomeActivity.class));
             finish();
         });
     }

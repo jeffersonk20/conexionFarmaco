@@ -270,7 +270,7 @@ public class RegistroActivity extends AppCompatActivity {
 
             DBHelper dbHelper = new DBHelper(this);
             // Guardar localmente con TODOS los campos para que funcionen offline
-            dbHelper.administrarUsuarios("nuevo", new String[]{id, nom, ape, tel, cor, cla, dir, ale, san, enf, urlFoto});
+            dbHelper.administrarUsuarios("nuevo", new String[]{id, "", nom, ape, tel, cor, cla, dir, ale, san, enf, urlFoto});
 
             if (Utilidades.hayInternet(this)) {
                 new Thread(() -> {
