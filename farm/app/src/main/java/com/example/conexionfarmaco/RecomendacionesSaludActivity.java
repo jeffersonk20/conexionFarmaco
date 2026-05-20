@@ -82,37 +82,20 @@ public class RecomendacionesSaludActivity extends AppCompatActivity {
     private void cargarRecomendaciones() {
         new Thread(() -> {
             try {
-                // Construir términos de búsqueda basados en salud (similar a HomeActivity)
-                StringBuilder regexBuilder = new StringBuilder("(?i)");
-                regexBuilder.append(enfermedad).append("|");
-                
-                if (enfermedad.contains("Diabetes")) regexBuilder.append("insulina|metformina|glibenclamida|glucosa|glucometro|");
-                if (enfermedad.contains("Hipertensión")) regexBuilder.append("enalapril|losartan|amlodipino|presion|captopril|");
-                if (enfermedad.contains("Asma")) regexBuilder.append("salbutamol|inhalador|montelukast|beclometasona|");
-                if (enfermedad.contains("Gastritis")) regexBuilder.append("omeprazol|pantoprazol|antiacido|ranitidina|");
-                if (enfermedad.contains("Arritmia")) regexBuilder.append("amiodarona|propranolol|digoxina|corazon|");
-                if (enfermedad.contains("Obesidad")) regexBuilder.append("orlistat|fentermina|dieta|peso|");
-                if (enfermedad.contains("Hipotiroidismo")) regexBuilder.append("levotiroxina|tiroides|eutirox|");
-
-                String finalRegex = regexBuilder.toString();
-                if (finalRegex.endsWith("|")) finalRegex = finalRegex.substring(0, finalRegex.length() - 1);
-
                 JSONArray docs = null;
 
                 if (Utilidades.hayInternet(this)) {
                     try {
                         JSONObject selector = new JSONObject();
-                        JSONArray orArray = new JSONArray();
-                        orArray.put(new JSONObject().put("nombre", new JSONObject().put("$regex", finalRegex)));
-                        orArray.put(new JSONObject().put("presentacion", new JSONObject().put("$regex", finalRegex)));
-                        selector.put("selector", new JSONObject().put("$or", orArray));
+                        // Ahora buscamos exactamente por el campo enfermedad_objetivo
+                        selector.put("selector", new JSONObject().put("enfermedad_objetivo", enfermedad));
 
                         TareaServidor tarea = new TareaServidor();
                         String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                         JSONObject resJson = new JSONObject(res);
                         if (resJson.has("docs")) {
                             docs = resJson.getJSONArray("docs");
-                            // Guardar en cache local para uso offline
+                            // Guardar en cache local
                             DBHelper db = new DBHelper(this);
                             for (int i = 0; i < docs.length(); i++) {
                                 db.guardarMedicamentoLocal(docs.getJSONObject(i));
@@ -124,23 +107,25 @@ public class RecomendacionesSaludActivity extends AppCompatActivity {
                 }
 
                 if (docs == null) {
-                    // Cargar de cache local
+                    // Cargar de cache local filtrando por la enfermedad exacta
                     DBHelper db = new DBHelper(this);
-                    List<JSONObject> cache = db.obtenerMedicamentosCache(finalRegex, false);
+                    List<JSONObject> cache = db.obtenerMedicamentosCache(enfermedad, false);
                     docs = new JSONArray(cache);
                 }
 
                 final JSONArray finalDocs = docs;
                 runOnUiThread(() -> {
                     container.removeAllViews();
-                    for (int i = 0; i < finalDocs.length(); i++) {
-                        try {
-                            container.addView(crearCardMedicamento(finalDocs.getJSONObject(i)));
-                        } catch (Exception e) {}
+                    if (finalDocs != null) {
+                        for (int i = 0; i < finalDocs.length(); i++) {
+                            try {
+                                container.addView(crearCardMedicamento(finalDocs.getJSONObject(i)));
+                            } catch (Exception e) {}
+                        }
                     }
-                    if (finalDocs.length() == 0) {
+                    if (finalDocs == null || finalDocs.length() == 0) {
                         TextView empty = new TextView(this);
-                        empty.setText("No se encontraron medicamentos específicos por el momento.");
+                        empty.setText("No hay medicamentos específicos recomendados por la farmacia para " + enfermedad + " por el momento.");
                         empty.setPadding(20, 50, 20, 20);
                         empty.setGravity(android.view.Gravity.CENTER);
                         container.addView(empty);

@@ -14,6 +14,8 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
@@ -26,6 +28,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
 
     private EditText etNombre, etPrecio, etStock, etPresentacion;
     private CheckBox cbPromocion;
+    private Spinner spEnfermedad;
     private Button btnGuardar, btnCancelar, btnEliminar;
     private ImageView ivFoto1, ivFoto2, ivFoto3;
     private String farmaciaId, farmaciaNombre;
@@ -44,6 +47,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
         etStock = findViewById(R.id.etAdminMedStock);
         etPresentacion = findViewById(R.id.etAdminMedPresentacion);
         cbPromocion = findViewById(R.id.cbAdminMedPromocion);
+        spEnfermedad = findViewById(R.id.spAdminMedEnfermedad);
         btnGuardar = findViewById(R.id.btnAdminMedGuardar);
         btnCancelar = findViewById(R.id.btnAdminMedCancelar);
         btnEliminar = findViewById(R.id.btnAdminMedEliminar);
@@ -51,6 +55,8 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
         ivFoto1 = findViewById(R.id.ivAdminMedFoto1);
         ivFoto2 = findViewById(R.id.ivAdminMedFoto2);
         ivFoto3 = findViewById(R.id.ivAdminMedFoto3);
+
+        configurarSpinner();
 
         ivFoto1.setOnClickListener(v -> seleccionarImagen(PICK_IMAGE_1));
         ivFoto2.setOnClickListener(v -> seleccionarImagen(PICK_IMAGE_2));
@@ -70,6 +76,11 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 etPresentacion.setText(medEdicion.optString("presentacion", ""));
                 cbPromocion.setChecked(medEdicion.optBoolean("promocion", false));
                 
+                String enf = medEdicion.optString("enfermedad_objetivo", "Ninguna");
+                ArrayAdapter adapter = (ArrayAdapter) spEnfermedad.getAdapter();
+                int pos = adapter.getPosition(enf);
+                if (pos >= 0) spEnfermedad.setSelection(pos);
+
                 base64Foto1 = medEdicion.optString("foto1", "");
                 base64Foto2 = medEdicion.optString("foto2", "");
                 base64Foto3 = medEdicion.optString("foto3", "");
@@ -90,6 +101,13 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
 
         btnGuardar.setOnClickListener(v -> guardarMedicamento());
         btnCancelar.setOnClickListener(v -> finish());
+    }
+
+    private void configurarSpinner() {
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
+                R.array.enfermedades, R.layout.spinner_item);
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
+        spEnfermedad.setAdapter(adapter);
     }
 
     private void seleccionarImagen(int requestCode) {
@@ -168,6 +186,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
         String sto = etStock.getText().toString();
         String preS = etPresentacion.getText().toString();
         boolean pro = cbPromocion.isChecked();
+        String enf = spEnfermedad.getSelectedItem().toString();
 
         if (nom.isEmpty() || pre.isEmpty()) {
             Toast.makeText(this, "Nombre y precio son requeridos", Toast.LENGTH_SHORT).show();
@@ -188,6 +207,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 json.put("stock", sto);
                 json.put("presentacion", preS);
                 json.put("promocion", pro);
+                json.put("enfermedad_objetivo", enf);
                 json.put("tipo", "medicamento");
                 
                 // Agregar fotos

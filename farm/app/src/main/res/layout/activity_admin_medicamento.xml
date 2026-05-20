@@ -78,6 +78,14 @@
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Recomendar para Enfermedad Crónica" android:textStyle="bold" android:textColor="@color/texto_secundario" />
+        <Spinner
+            android:id="@+id/spAdminMedEnfermedad"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:background="@drawable/modern_edittext"
+            android:layout_marginBottom="16dp"/>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

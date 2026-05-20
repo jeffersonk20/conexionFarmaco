@@ -50,11 +50,11 @@ public class AdminLoginActivity extends AppCompatActivity {
                 JSONObject query = new JSONObject();
                 query.put("correo", cor);
                 query.put("clave", cla);
-                query.put("tipo", "farmacia");
                 selector.put("selector", query);
                 selector.put("limit", 1);
 
                 TareaServidor tarea = new TareaServidor();
+                // Buscar en la base de datos de farmacias
                 String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
                 
                 JSONObject resJson = new JSONObject(respuesta);
@@ -62,6 +62,8 @@ public class AdminLoginActivity extends AppCompatActivity {
                     JSONArray docs = resJson.getJSONArray("docs");
                     if (docs.length() > 0) {
                         JSONObject farmDoc = docs.getJSONObject(0);
+                        // Asegurar que la clave esté en el objeto para guardarla localmente
+                        if (!farmDoc.has("clave")) farmDoc.put("clave", cla);
                         entrar(farmDoc, true); // true = guardar en local
                     } else {
                         loginLocal(cor, cla);

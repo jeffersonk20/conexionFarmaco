@@ -13,7 +13,7 @@ import java.util.List;
 
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "conexion_farmaco.db";
-    private static final int DATABASE_VERSION = 10;
+    private static final int DATABASE_VERSION = 11;
 
     public DBHelper(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -24,19 +24,23 @@ public class DBHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE usuarios (id TEXT PRIMARY KEY, nombres TEXT, apellidos TEXT, telefono TEXT, correo TEXT, clave TEXT, " +
                 "direccion TEXT, alergias TEXT, tipo_sangre TEXT, enfermedades TEXT, foto TEXT)");
         db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT)");
-        db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, nombre_farmacia TEXT)");
+        db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, nombre_farmacia TEXT, enfermedad_objetivo TEXT)");
         db.execSQL("CREATE TABLE pedidos (id TEXT PRIMARY KEY, cliente_correo TEXT, cliente_nombre TEXT, cliente_direccion TEXT, cliente_telefono TEXT, items TEXT, total TEXT, fecha TEXT, estado TEXT, metodo_pago TEXT, farmacias_ids TEXT)");
         db.execSQL("CREATE TABLE pendientes (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT, metodo TEXT, json TEXT, tipo TEXT)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        db.execSQL("DROP TABLE IF EXISTS usuarios");
-        db.execSQL("DROP TABLE IF EXISTS farmacias");
-        db.execSQL("DROP TABLE IF EXISTS medicamentos");
-        db.execSQL("DROP TABLE IF EXISTS pedidos");
-        db.execSQL("DROP TABLE IF EXISTS pendientes");
-        onCreate(db);
+        if (oldVersion < 11) {
+            db.execSQL("ALTER TABLE medicamentos ADD COLUMN enfermedad_objetivo TEXT");
+        } else {
+            db.execSQL("DROP TABLE IF EXISTS usuarios");
+            db.execSQL("DROP TABLE IF EXISTS farmacias");
+            db.execSQL("DROP TABLE IF EXISTS medicamentos");
+            db.execSQL("DROP TABLE IF EXISTS pedidos");
+            db.execSQL("DROP TABLE IF EXISTS pendientes");
+            onCreate(db);
+        }
     }
 
     public long agregarPendiente(String url, String metodo, String json, String tipo) {
@@ -126,6 +130,7 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("promocion", med.optBoolean("promocion", false) ? 1 : 0);
             cv.put("foto1", med.optString("foto1", ""));
             cv.put("nombre_farmacia", med.optString("nombre_farmacia", ""));
+            cv.put("enfermedad_objetivo", med.optString("enfermedad_objetivo", "Ninguna"));
             db.insertWithOnConflict("medicamentos", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         } catch (Exception e) {}
     }
@@ -144,21 +149,24 @@ public class DBHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = getReadableDatabase();
         String sql = "SELECT * FROM medicamentos";
         
+        List<String> selectionArgs = new ArrayList<>();
+        StringBuilder whereClause = new StringBuilder();
+
         if (soloPromos) {
-            sql += " WHERE promocion = 1";
+            whereClause.append("promocion = 1");
         } else if (query != null && !query.isEmpty()) {
-            // Manejar múltiples términos de búsqueda (separados por | o espacios)
-            String[] terms = query.replace("(?i)", "").split("\\|");
-            sql += " WHERE ";
-            for (int i = 0; i < terms.length; i++) {
-                String term = terms[i].trim();
-                if (term.isEmpty()) continue;
-                sql += "(nombre LIKE '%" + term + "%' OR presentacion LIKE '%" + term + "%')";
-                if (i < terms.length - 1) sql += " OR ";
-            }
+            // El query puede ser una enfermedad específica o una búsqueda por nombre
+            whereClause.append("(enfermedad_objetivo = ? OR nombre LIKE ? OR presentacion LIKE ?)");
+            selectionArgs.add(query);
+            selectionArgs.add("%" + query + "%");
+            selectionArgs.add("%" + query + "%");
         }
 
-        Cursor cursor = db.rawQuery(sql, null);
+        if (whereClause.length() > 0) {
+            sql += " WHERE " + whereClause.toString();
+        }
+
+        Cursor cursor = db.rawQuery(sql, selectionArgs.toArray(new String[0]));
         if (cursor.moveToFirst()) {
             do {
                 try {
@@ -171,6 +179,7 @@ public class DBHelper extends SQLiteOpenHelper {
                     obj.put("presentacion", cursor.getString(5));
                     obj.put("foto1", cursor.getString(7));
                     obj.put("nombre_farmacia", cursor.getString(8));
+                    obj.put("enfermedad_objetivo", cursor.getString(9));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (cursor.moveToNext());

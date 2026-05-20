@@ -147,7 +147,10 @@ public class HomeActivity extends AppCompatActivity {
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
                         DBHelper db = new DBHelper(this);
-                        for (int i = 0; i < docs.length(); i++) db.guardarMedicamentoCache(docs.getJSONObject(i));
+                        for (int i = 0; i < docs.length(); i++) {
+                            JSONObject med = docs.getJSONObject(i);
+                            db.guardarMedicamentoLocal(med);
+                        }
                         
                         runOnUiThread(() -> mostrarListaMedicamentos(docs, containerPromociones));
                         return;
