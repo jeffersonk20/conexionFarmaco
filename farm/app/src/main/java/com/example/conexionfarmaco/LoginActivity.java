@@ -5,9 +5,13 @@ import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.concurrent.Executor;
 
 public class LoginActivity extends AppCompatActivity {
     EditText txtCorreo, txtClave;
@@ -23,6 +27,75 @@ public class LoginActivity extends AppCompatActivity {
         btnIngresar = findViewById(R.id.btnIngresar);
 
         btnIngresar.setOnClickListener(v -> loginNube());
+
+        findViewById(R.id.ivBiometric).setOnClickListener(v -> loginBiometrico());
+        findViewById(R.id.tvRegistro).setOnClickListener(v -> {
+            startActivity(new Intent(this, RegistroActivity.class));
+        });
+    }
+
+    private void loginBiometrico() {
+        androidx.biometric.BiometricManager biometricManager = androidx.biometric.BiometricManager.from(this);
+        switch (biometricManager.canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG | androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)) {
+            case androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS:
+                break;
+            case androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE:
+                mostrar("Este dispositivo no tiene sensor biométrico");
+                return;
+            case androidx.biometric.BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE:
+                mostrar("El sensor biométrico no está disponible");
+                return;
+            case androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED:
+                mostrar("No tienes huellas registradas en tu equipo");
+                return;
+            default:
+                mostrar("Error desconocido en biometría");
+                return;
+        }
+
+        String lastUser = getSharedPreferences("UserPrefs", MODE_PRIVATE).getString("lastUserData", "");
+        if (lastUser.isEmpty()) {
+            mostrar("Debe ingresar con contraseña la primera vez para activar la huella");
+            return;
+        }
+
+        Executor executor = ContextCompat.getMainExecutor(this);
+        BiometricPrompt biometricPrompt = new BiometricPrompt(LoginActivity.this,
+                executor, new BiometricPrompt.AuthenticationCallback() {
+            @Override
+            public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                super.onAuthenticationError(errorCode, errString);
+                // Si el error es porque el usuario canceló, no mostrar nada molesto
+                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                    mostrar("Error de autenticación: " + errString);
+                }
+            }
+
+            @Override
+            public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                super.onAuthenticationSucceeded(result);
+                try {
+                    JSONObject userDoc = new JSONObject(lastUser);
+                    entrar(userDoc, false);
+                } catch (Exception e) {
+                    mostrar("Error al recuperar sesión");
+                }
+            }
+
+            @Override
+            public void onAuthenticationFailed() {
+                super.onAuthenticationFailed();
+                mostrar("Huella no reconocida");
+            }
+        });
+
+        BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Ingreso Rápido")
+                .setSubtitle("Use su huella digital para entrar")
+                .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG | androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+                .build();
+
+        biometricPrompt.authenticate(promptInfo);
     }
 
     private void loginNube() {
@@ -104,6 +177,7 @@ public class LoginActivity extends AppCompatActivity {
         // Guardar datos en Preferences para la sesión actual
         getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
                 .putString("userData", userDoc.toString())
+                .putString("lastUserData", userDoc.toString()) // Nueva clave persistente para biometría
                 .apply();
 
         if (guardarEnLocal) {

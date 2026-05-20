@@ -155,11 +155,22 @@ public class DBHelper extends SQLiteOpenHelper {
         if (soloPromos) {
             whereClause.append("promocion = 1");
         } else if (query != null && !query.isEmpty()) {
-            // El query puede ser una enfermedad específica o una búsqueda por nombre
-            whereClause.append("(enfermedad_objetivo = ? OR nombre LIKE ? OR presentacion LIKE ?)");
-            selectionArgs.add(query);
-            selectionArgs.add("%" + query + "%");
-            selectionArgs.add("%" + query + "%");
+            // Normalización extrema para SQLite: reemplaza todas las vocales por '_'
+            // Esto permite que 'Anadén', 'anaden', 'ANADEN' coincidan con cualquier variante
+            // También eliminamos puntos y comas que pueda traer la voz
+            String cleanQuery = query.toLowerCase().replaceAll("[.,]", "").trim();
+            String flexibleQuery = cleanQuery
+                    .replaceAll("[aáàä]", "_")
+                    .replaceAll("[eéèë]", "_")
+                    .replaceAll("[iíìï]", "_")
+                    .replaceAll("[oóòö]", "_")
+                    .replaceAll("[uúùü]", "_");
+
+            whereClause.append("(enfermedad_objetivo LIKE ? OR nombre LIKE ? OR presentacion LIKE ?)");
+            String param = "%" + flexibleQuery + "%";
+            selectionArgs.add(param);
+            selectionArgs.add(param);
+            selectionArgs.add(param);
         }
 
         if (whereClause.length() > 0) {
@@ -204,6 +215,20 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("metodo_pago", p.optString("metodo_pago", ""));
             cv.put("farmacias_ids", p.optString("farmacias_ids", "[]"));
             db.insertWithOnConflict("pedidos", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+        } catch (Exception e) {}
+    }
+
+    public void eliminarPedidoLocal(String id) {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            db.delete("pedidos", "id = ?", new String[]{id});
+        } catch (Exception e) {}
+    }
+
+    public void limpiarPedidosUsuario(String correo) {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            db.delete("pedidos", "cliente_correo = ?", new String[]{correo});
         } catch (Exception e) {}
     }
 
@@ -263,7 +288,7 @@ public class DBHelper extends SQLiteOpenHelper {
     public void administrarUsuarios(String accion, String[] datos) {
         SQLiteDatabase db = getWritableDatabase();
         if (accion.equals("nuevo")) {
-            db.execSQL("INSERT INTO usuarios(id, nombres, apellidos, telefono, correo, clave, direccion, alergias, tipo_sangre, enfermedades, foto) VALUES(?,?,?,?,?,?,?,?,?,?,?)", datos);
+            db.execSQL("INSERT OR REPLACE INTO usuarios(id, nombres, apellidos, telefono, correo, clave, direccion, alergias, tipo_sangre, enfermedades, foto) VALUES(?,?,?,?,?,?,?,?,?,?,?)", datos);
         } else if (accion.equals("modificar")) {
             db.execSQL("UPDATE usuarios SET nombres=?, apellidos=?, telefono=?, correo=?, clave=?, direccion=?, alergias=?, tipo_sangre=?, enfermedades=?, foto=? WHERE id=?", 
                 new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[10], datos[0]});
@@ -273,7 +298,7 @@ public class DBHelper extends SQLiteOpenHelper {
     public void administrarFarmacias(String accion, String[] datos) {
         SQLiteDatabase db = getWritableDatabase();
         if (accion.equals("nuevo")) {
-            db.execSQL("INSERT INTO farmacias(id, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?)", datos);
+            db.execSQL("INSERT OR REPLACE INTO farmacias(id, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?)", datos);
         } else if (accion.equals("modificar")) {
             db.execSQL("UPDATE farmacias SET empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=? WHERE id=?", 
                 new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[0]});
@@ -285,7 +310,7 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public Cursor loginFarmacia(String correo, String clave) {
-        return getReadableDatabase().rawQuery("SELECT * FROM farmacias WHERE correo=? AND clave=?", new String[]{correo, clave});
+        return getReadableDatabase().rawQuery("SELECT * FROM farmacias WHERE LOWER(correo)=LOWER(?) AND clave=?", new String[]{correo, clave});
     }
 
     public JSONObject obtenerFarmaciaLocal(String id) {

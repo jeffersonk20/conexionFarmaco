@@ -22,6 +22,7 @@ import java.util.List;
 public class AdminHomeActivity extends AppCompatActivity {
 
     private TextView tvNombreFarmacia, tvSinMedicamentos;
+    private TextView tvStatPedidos, tvStatStockBajo;
     private LinearLayout containerMedicamentos;
     private EditText etBuscador;
     private String farmaciaId;
@@ -34,6 +35,9 @@ public class AdminHomeActivity extends AppCompatActivity {
 
         tvNombreFarmacia = findViewById(R.id.tvAdminNombreFarmacia);
         tvSinMedicamentos = findViewById(R.id.tvAdminSinMedicamentos);
+        tvStatPedidos = findViewById(R.id.tvStatPedidos);
+        tvStatStockBajo = findViewById(R.id.tvStatStockBajo);
+        
         containerMedicamentos = findViewById(R.id.containerMedicamentosAdmin);
         etBuscador = findViewById(R.id.etAdminBuscadorMedicamento);
         
@@ -54,7 +58,59 @@ public class AdminHomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, AdminFacturacionActivity.class));
         });
 
+        findViewById(R.id.cardStockBajo).setOnClickListener(v -> {
+            filtrarStockBajo();
+        });
+
         configurarBuscador();
+    }
+
+    private void filtrarStockBajo() {
+        JSONArray filtrados = new JSONArray();
+        for (int i = 0; i < listaOriginalMedicamentos.length(); i++) {
+            try {
+                JSONObject med = listaOriginalMedicamentos.getJSONObject(i);
+                int stock = Integer.parseInt(med.optString("stock", "0"));
+                if (stock < 5) filtrados.put(med);
+            } catch (Exception e) {}
+        }
+        mostrarMedicamentos(filtrados);
+        Toast.makeText(this, "Mostrando productos con stock bajo", Toast.LENGTH_SHORT).show();
+    }
+
+    private void actualizarDashboard() {
+        DBHelper db = new DBHelper(this);
+        
+        // 1. Pedidos
+        new Thread(() -> {
+            try {
+                List<JSONObject> pedidos = db.obtenerPedidosAdminCache();
+                int count = 0;
+                for (JSONObject p : pedidos) {
+                    JSONArray ids = p.optJSONArray("farmacias_ids");
+                    if (ids != null) {
+                        for (int i = 0; i < ids.length(); i++) {
+                            if (ids.getString(i).equals(farmaciaId)) {
+                                count++;
+                                break;
+                            }
+                        }
+                    }
+                }
+                final int finalCount = count;
+                runOnUiThread(() -> tvStatPedidos.setText(String.valueOf(finalCount)));
+            } catch (Exception e) {}
+        }).start();
+
+        // 2. Stock Bajo (se calcula al cargar medicamentos)
+        int stockBajo = 0;
+        for (int i = 0; i < listaOriginalMedicamentos.length(); i++) {
+            try {
+                int stock = Integer.parseInt(listaOriginalMedicamentos.getJSONObject(i).optString("stock", "0"));
+                if (stock < 5) stockBajo++;
+            } catch (Exception e) {}
+        }
+        tvStatStockBajo.setText(String.valueOf(stockBajo));
     }
 
     private void configurarBuscador() {
@@ -92,6 +148,7 @@ public class AdminHomeActivity extends AppCompatActivity {
         super.onResume();
         Utilidades.sincronizar(this);
         cargarMedicamentos();
+        actualizarDashboard();
     }
 
     private void cargarMedicamentos() {
@@ -112,6 +169,7 @@ public class AdminHomeActivity extends AppCompatActivity {
                             db.guardarMedicamentoLocal(listaOriginalMedicamentos.getJSONObject(i));
                         
                         actualizarListaAdmin();
+                        runOnUiThread(this::actualizarDashboard);
                         return;
                     }
                 }
@@ -123,6 +181,7 @@ public class AdminHomeActivity extends AppCompatActivity {
                     if (m.optString("id_farmacia").equals(farmaciaId)) listaOriginalMedicamentos.put(m);
                 }
                 actualizarListaAdmin();
+                runOnUiThread(this::actualizarDashboard);
 
             } catch (Exception e) {
                 Log.e("AdminHome", "Error carga", e);

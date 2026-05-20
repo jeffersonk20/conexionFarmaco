@@ -85,9 +85,9 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 base64Foto2 = medEdicion.optString("foto2", "");
                 base64Foto3 = medEdicion.optString("foto3", "");
                 
-                cargarImagenBase64(base64Foto1, ivFoto1);
-                cargarImagenBase64(base64Foto2, ivFoto2);
-                cargarImagenBase64(base64Foto3, ivFoto3);
+                Utilidades.cargarImagenBase64(base64Foto1, ivFoto1);
+                Utilidades.cargarImagenBase64(base64Foto2, ivFoto2);
+                Utilidades.cargarImagenBase64(base64Foto3, ivFoto3);
                 
                 ((TextView)findViewById(R.id.tvAdminTituloMed)).setText("Editar Medicamento");
                 btnGuardar.setText("Actualizar");
@@ -169,15 +169,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
         byte[] b = baos.toByteArray();
-        return Base64.encodeToString(b, Base64.DEFAULT);
-    }
-
-    private void cargarImagenBase64(String base64, ImageView iv) {
-        if (base64 != null && !base64.isEmpty()) {
-            byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
-            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-            iv.setImageBitmap(decodedByte);
-        }
+        return Base64.encodeToString(b, Base64.NO_WRAP);
     }
 
     private void guardarMedicamento() {

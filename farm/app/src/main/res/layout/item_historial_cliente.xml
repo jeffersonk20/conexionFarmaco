@@ -78,6 +78,17 @@
                 android:layout_marginEnd="8dp"
                 android:visibility="gone" />
 
+            <Button
+                android:id="@+id/btnRepetirPedido"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Repetir"
+                android:textSize="11sp"
+                android:textAllCaps="false"
+                android:backgroundTint="@color/azul_suave"
+                android:textColor="@color/azul_primario"
+                android:layout_marginEnd="8dp" />
+
             <Space
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"

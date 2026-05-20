@@ -41,68 +41,71 @@ public class Utilidades {
     }
 
     public static void sincronizar(Context context) {
-        if (!hayInternet(context)) return;
+        androidx.work.OneTimeWorkRequest syncRequest =
+                new androidx.work.OneTimeWorkRequest.Builder(SyncWorker.class)
+                        .setConstraints(new androidx.work.Constraints.Builder()
+                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                .build())
+                        .build();
 
-        DBHelper dbHelper = new DBHelper(context);
-        List<JSONObject> pendientes = dbHelper.obtenerPendientes();
+        androidx.work.WorkManager.getInstance(context).enqueue(syncRequest);
+        Log.d("Sync", "Tarea de sincronización encolada");
+    }
 
-        for (JSONObject p : pendientes) {
-            new Thread(() -> {
-                try {
-                    String id_local = p.getString("id_local");
-                    String url = p.getString("url");
-                    String metodo = p.getString("metodo");
-                    String json = p.getString("json");
-                    String tipo = p.getString("tipo");
-
-                    if (tipo.equals("couchdb")) {
-                        TareaServidor tarea = new TareaServidor();
-                        String res = tarea.execute(json, metodo, url).get();
-                        JSONObject resJson = new JSONObject(res);
-                        
-                        // Si se guardó (ok:true) o si hay conflicto (409) significa que ya existe
-                        if (resJson.optBoolean("ok", false) || res.contains("409")) {
-                            dbHelper.eliminarPendiente(id_local);
-                        }
-                    } else if (tipo.equals("email")) {
-                        JSONObject emailData = new JSONObject(json);
-                        MailManager mail = new MailManager(
-                                emailData.getString("destinatario"),
-                                emailData.getString("asunto"),
-                                emailData.getString("contenido")
-                        );
-                        mail.execute();
-                        dbHelper.eliminarPendiente(id_local);
-                    }
-                } catch (Exception e) {
-                    Log.e("Sync", "Error sincronizando: " + e.getMessage());
-                }
-            }).start();
+    public static String getEstadoPedidoColor(String estado) {
+        switch (estado.toLowerCase()) {
+            case "pendiente": return "#FFC107"; // Amber
+            case "en camino": return "#2196F3"; // Blue
+            case "entregado": return "#4CAF50"; // Green
+            case "cancelado": return "#F44336"; // Red
+            default: return "#9E9E9E"; // Grey
         }
     }
 
 
     public static void cargarImagenBase64(String base64, ImageView iv) {
-        if (base64 != null && !base64.isEmpty()) {
-            try {
-                // Eliminar filtros de color y limpiar la vista antes de cargar
-                iv.setColorFilter(null);
-                iv.setPadding(0, 0, 0, 0);
-                iv.setBackground(null);
+        if (base64 == null || base64.isEmpty()) return;
 
-                // Manejar prefijos si existen
-                if (base64.contains(",")) {
-                    base64 = base64.split(",")[1];
-                }
+        try {
+            // Limpiar filtros y padding previos
+            iv.setColorFilter(null);
+            iv.setPadding(0, 0, 0, 0);
 
-                byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
-                Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-                if (decodedByte != null) {
-                    iv.setImageBitmap(decodedByte);
-                }
-            } catch (Exception e) {
-                Log.e("Utilidades", "Error decodificando imagen", e);
+            // 1. Manejar URIs directas (galería, cámara, etc.)
+            if (base64.startsWith("content://") || base64.startsWith("file://")) {
+                iv.setImageURI(android.net.Uri.parse(base64));
+                return;
             }
+
+            // 2. Manejar rutas de archivos locales (que empiecen por /)
+            // Solo si la cadena es corta (una ruta no suele ser tan larga como un Base64)
+            if (base64.startsWith("/") && base64.length() < 1000) {
+                java.io.File file = new java.io.File(base64);
+                if (file.exists()) {
+                    Bitmap bmp = BitmapFactory.decodeFile(file.getAbsolutePath());
+                    if (bmp != null) {
+                        iv.setImageBitmap(bmp);
+                        return;
+                    }
+                }
+            }
+
+            // 3. Procesar como Base64 (para fotos guardadas en la nube)
+            String pureBase64 = base64;
+            if (pureBase64.contains(",")) {
+                pureBase64 = pureBase64.split(",")[1];
+            }
+
+            // Limpieza total de espacios y saltos de línea para evitar corrupción
+            pureBase64 = pureBase64.trim().replaceAll("\\s+", "");
+
+            byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT);
+            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+            if (decodedByte != null) {
+                iv.setImageBitmap(decodedByte);
+            }
+        } catch (Exception e) {
+            Log.e("Utilidades", "Error cargando imagen: " + e.getMessage());
         }
     }
 

@@ -45,6 +45,15 @@
                     android:textColor="@color/white"
                     android:textSize="22sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvAdminPerfilCorreo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="correo@farmacia.com"
+                    android:textColor="@color/white"
+                    android:alpha="0.8"
+                    android:textSize="14sp" />
             </LinearLayout>
 
             <androidx.appcompat.widget.Toolbar
@@ -72,6 +81,69 @@
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="6dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="20dp"
+                    android:weightSum="2">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tvAdminStatTotalMed"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0"
+                            android:textColor="@color/azul_vibrante"
+                            android:textSize="24sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Medicamentos"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="match_parent"
+                        android:background="#DDDDDD" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tvAdminStatVentas"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0"
+                            android:textColor="@color/azul_vibrante"
+                            android:textSize="24sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Ventas Totales"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 app:cardCornerRadius="20dp"
                 app:cardElevation="6dp">
 
@@ -84,23 +156,33 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Datos de la Empresa"
+                        android:text="Editar Información"
                         android:textColor="@color/azul_primario"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:layout_marginBottom="16dp" />
 
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DIRECCIÓN" android:textColor="@color/texto_secundario" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/tvAdminPerfilDireccion" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cargando..." android:textColor="#333333" android:textSize="16sp" android:layout_marginBottom="16dp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NOMBRE EMPRESA" android:textColor="@color/texto_secundario" android:textSize="10sp" android:textStyle="bold" />
+                    <EditText android:id="@+id/etAdminPerfilNombre" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Nombre" android:textSize="15sp" android:layout_marginBottom="12dp" android:background="@drawable/rounded_edittext" android:padding="12dp" />
 
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TELÉFONO" android:textColor="@color/texto_secundario" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/tvAdminPerfilTelefono" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cargando..." android:textColor="#333333" android:textSize="16sp" android:layout_marginBottom="16dp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DIRECCIÓN" android:textColor="@color/texto_secundario" android:textSize="10sp" android:textStyle="bold" />
+                    <EditText android:id="@+id/etAdminPerfilDireccion" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Dirección" android:textSize="15sp" android:layout_marginBottom="12dp" android:background="@drawable/rounded_edittext" android:padding="12dp" />
 
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CORREO" android:textColor="@color/texto_secundario" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/tvAdminPerfilCorreo" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cargando..." android:textColor="#333333" android:textSize="16sp" android:layout_marginBottom="16dp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TELÉFONO" android:textColor="@color/texto_secundario" android:textSize="10sp" android:textStyle="bold" />
+                    <EditText android:id="@+id/etAdminPerfilTelefono" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Teléfono" android:inputType="phone" android:textSize="15sp" android:layout_marginBottom="12dp" android:background="@drawable/rounded_edittext" android:padding="12dp" />
 
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PRESENTACIÓN" android:textColor="@color/texto_secundario" android:textSize="12sp" android:textStyle="bold" />
-                    <TextView android:id="@+id/tvAdminPerfilDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cargando..." android:textColor="#333333" android:textSize="16sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DESCRIPCIÓN" android:textColor="@color/texto_secundario" android:textSize="10sp" android:textStyle="bold" />
+                    <EditText android:id="@+id/etAdminPerfilDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Descripción de la farmacia" android:textSize="14sp" android:minLines="3" android:gravity="top" android:background="@drawable/rounded_edittext" android:padding="12dp" />
+
+                    <Button
+                        android:id="@+id/btnActualizarPerfil"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:layout_marginTop="20dp"
+                        android:text="Guardar Cambios"
+                        android:backgroundTint="@color/azul_vibrante"
+                        android:textColor="@color/white"
+                        android:textAllCaps="false" />
 
                 </LinearLayout>
             </androidx.cardview.widget.CardView>

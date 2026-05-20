@@ -31,57 +31,18 @@ public class AdminLoginActivity extends AppCompatActivity {
     }
 
     private void loginFarmacia() {
-        String cor = etCorreo.getText().toString();
-        String cla = etPass.getText().toString();
+        String cor = etCorreo.getText().toString().trim();
+        String cla = etPass.getText().toString().trim();
 
         if (cor.isEmpty() || cla.isEmpty()) {
             Toast.makeText(this, "Ingrese sus credenciales de empresa", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        if (!Utilidades.hayInternet(this)) {
-            loginLocal(cor, cla);
-            return;
-        }
-
-        new Thread(() -> {
-            try {
-                JSONObject selector = new JSONObject();
-                JSONObject query = new JSONObject();
-                query.put("correo", cor);
-                query.put("clave", cla);
-                selector.put("selector", query);
-                selector.put("limit", 1);
-
-                TareaServidor tarea = new TareaServidor();
-                // Buscar en la base de datos de farmacias
-                String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
-                
-                JSONObject resJson = new JSONObject(respuesta);
-                if (resJson.has("docs")) {
-                    JSONArray docs = resJson.getJSONArray("docs");
-                    if (docs.length() > 0) {
-                        JSONObject farmDoc = docs.getJSONObject(0);
-                        // Asegurar que la clave esté en el objeto para guardarla localmente
-                        if (!farmDoc.has("clave")) farmDoc.put("clave", cla);
-                        entrar(farmDoc, true); // true = guardar en local
-                    } else {
-                        loginLocal(cor, cla);
-                    }
-                } else {
-                    loginLocal(cor, cla);
-                }
-
-            } catch (Exception e) {
-                loginLocal(cor, cla);
-            }
-        }).start();
-    }
-
-    private void loginLocal(String cor, String cla) {
+        // 1. Intentar Login Local primero (Soporte Offline Total)
         DBHelper db = new DBHelper(this);
         android.database.Cursor cursor = db.loginFarmacia(cor, cla);
-        if (cursor.moveToFirst()) {
+        if (cursor != null && cursor.moveToFirst()) {
             try {
                 JSONObject farmDoc = new JSONObject();
                 farmDoc.put("_id", cursor.getString(0));
@@ -92,14 +53,63 @@ public class AdminLoginActivity extends AppCompatActivity {
                 farmDoc.put("clave", cursor.getString(5));
                 farmDoc.put("foto", cursor.getString(6));
                 farmDoc.put("descripcion", cursor.getString(7));
-                entrar(farmDoc, false); // false = no re-guardar en DB
+                cursor.close();
+                Log.d("AdminLogin", "Login local exitoso para: " + cor);
+                entrar(farmDoc, false);
+                return;
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Error local: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                Log.e("AdminLogin", "Error cargando datos locales", e);
             }
-        } else {
-            runOnUiThread(() -> Toast.makeText(this, "Credenciales incorrectas o sin registro local", Toast.LENGTH_SHORT).show());
         }
-        cursor.close();
+        if (cursor != null) cursor.close();
+
+        // 2. Si no existe local o falló, intentar con Internet
+        if (!Utilidades.hayInternet(this)) {
+            Toast.makeText(this, "No tienes internet y esta cuenta no está registrada localmente", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Toast.makeText(this, "Validando en la nube...", Toast.LENGTH_SHORT).show();
+        
+        new Thread(() -> {
+            try {
+                // CouchDB selector (Suele ser sensible a mayúsculas, enviamos tal cual)
+                JSONObject query = new JSONObject();
+                query.put("correo", cor);
+                query.put("clave", cla);
+                
+                JSONObject selector = new JSONObject();
+                selector.put("selector", query);
+                selector.put("limit", 1);
+
+                TareaServidor tarea = new TareaServidor();
+                String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
+                
+                if (respuesta == null || respuesta.isEmpty()) {
+                    runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Servidor no responde", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                JSONObject resJson = new JSONObject(respuesta);
+                if (resJson.has("docs")) {
+                    JSONArray docs = resJson.getJSONArray("docs");
+                    if (docs.length() > 0) {
+                        JSONObject farmDoc = docs.getJSONObject(0);
+                        // Muy importante: Guardar la clave que funcionó para el acceso offline
+                        farmDoc.put("clave", cla);
+                        entrar(farmDoc, true);
+                    } else {
+                        runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Correo o contraseña de empresa incorrectos", Toast.LENGTH_SHORT).show());
+                    }
+                } else {
+                    runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Error en la respuesta del servidor", Toast.LENGTH_SHORT).show());
+                }
+
+            } catch (Exception e) {
+                Log.e("AdminLogin", "Error en login por internet", e);
+                runOnUiThread(() -> Toast.makeText(AdminLoginActivity.this, "Error de red: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     private void entrar(JSONObject farmDoc, boolean guardarEnLocal) throws Exception {
@@ -114,9 +124,8 @@ public class AdminLoginActivity extends AppCompatActivity {
 
         if (guardarEnLocal) {
             DBHelper db = new DBHelper(this);
-            String clave = farmDoc.optString("clave", etPass.getText().toString());
+            String clave = farmDoc.optString("clave", "");
             
-            // Usar INSERT OR REPLACE para asegurar que tenemos el perfil completo
             db.getWritableDatabase().execSQL("INSERT OR REPLACE INTO farmacias(id, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?)",
                     new String[]{
                             id, 
@@ -131,12 +140,10 @@ public class AdminLoginActivity extends AppCompatActivity {
         }
 
         runOnUiThread(() -> {
-            Toast.makeText(this, "Bienvenido " + nombre, Toast.LENGTH_SHORT).show();
-            startActivity(new Intent(this, AdminHomeActivity.class));
+            Toast.makeText(AdminLoginActivity.this, "¡Bienvenido " + nombre + "!", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(AdminLoginActivity.this, AdminHomeActivity.class);
+            startActivity(intent);
             finish();
         });
     }
-
-
-
 }

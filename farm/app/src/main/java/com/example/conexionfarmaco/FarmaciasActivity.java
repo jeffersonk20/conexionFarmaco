@@ -35,21 +35,32 @@ public class FarmaciasActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 if (Utilidades.hayInternet(this)) {
+                    // Traer todas las farmacias. Si CouchDB tiene muchos documentos,
+                    // es mejor buscar por tipo o por un campo que todas tengan.
                     JSONObject selector = new JSONObject();
-                    selector.put("selector", new JSONObject().put("tipo", "farmacia"));
+                    JSONObject query = new JSONObject();
+                    // Intentamos traer documentos que tengan el campo 'empresa' (que son las farmacias)
+                    query.put("empresa", new JSONObject().put("$exists", true));
+                    selector.put("selector", query);
+                    
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
+                    Log.d("FarmaciasAct", "Respuesta servidor: " + res);
+                    
                     JSONObject resJson = new JSONObject(res);
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
                         DBHelper db = new DBHelper(this);
-                        for (int i = 0; i < docs.length(); i++) db.guardarFarmaciaCache(docs.getJSONObject(i));
+                        for (int i = 0; i < docs.length(); i++) {
+                            db.guardarFarmaciaCache(docs.getJSONObject(i));
+                        }
                         runOnUiThread(() -> mostrarFarmacias(docs));
                         return;
                     }
                 }
                 // Si offline o falla red
                 List<JSONObject> cache = new DBHelper(this).obtenerFarmaciasCache();
+                Log.d("FarmaciasAct", "Cargando del cache: " + cache.size() + " farmacias");
                 runOnUiThread(() -> mostrarFarmacias(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("FarmaciasAct", "Error carga", e);
@@ -97,12 +108,8 @@ public class FarmaciasActivity extends AppCompatActivity {
         }
 
         String fotoPath = farmacia.optString("foto", "");
-        if (!fotoPath.isEmpty() && ivLogo != null) {
-            try {
-                ivLogo.setImageURI(android.net.Uri.parse(fotoPath));
-            } catch (Exception e) {
-                ivLogo.setImageResource(R.mipmap.ic_launcher);
-            }
+        if (ivLogo != null) {
+            Utilidades.cargarImagenBase64(fotoPath, ivLogo);
         }
 
         card.setOnClickListener(v -> {

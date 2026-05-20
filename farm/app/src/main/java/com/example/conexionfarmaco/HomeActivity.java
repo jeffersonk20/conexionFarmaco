@@ -79,6 +79,17 @@ public class HomeActivity extends AppCompatActivity {
         // Cargar secciones iniciales
         cargarPromociones();
 
+        findViewById(R.id.ivVoiceSearch).setOnClickListener(v -> {
+            Intent intent = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Diga el nombre del medicamento");
+            try {
+                startActivityForResult(intent, 100);
+            } catch (Exception e) {
+                Toast.makeText(this, "Su dispositivo no soporta búsqueda por voz", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         // Intentar sincronizar datos pendientes
         Utilidades.sincronizar(this);
 
@@ -97,6 +108,21 @@ public class HomeActivity extends AppCompatActivity {
                     }
                 }
             });
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
+            java.util.ArrayList<String> result = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+            if (result != null && !result.isEmpty()) {
+                // Limpiar el texto de la voz de puntos, comas y espacios extra
+                String voiceQuery = result.get(0).replaceAll("[.,]", "").trim();
+                etBuscador.setText(voiceQuery);
+                mostrarModoBusqueda(true);
+                buscarMedicamentos(voiceQuery);
+            }
         }
     }
 
@@ -178,9 +204,27 @@ public class HomeActivity extends AppCompatActivity {
     private void buscarMedicamentos(String query) {
         new Thread(() -> {
             try {
+                // Limpiar query de puntos, comas y espacios extra (especialmente para voz)
+                String cleanQuery = query.toLowerCase().replaceAll("[.,]", "").trim();
+                
                 if (Utilidades.hayInternet(this)) {
+                    // Normalización extrema para CouchDB: 
+                    // Cada vocal en la búsqueda se convierte en un grupo [vocal_con_sin_tilde]
+                    String regexQuery = "(?i).*" + cleanQuery
+                            .replaceAll("[aáàä]", "[aáàä]")
+                            .replaceAll("[eéèë]", "[eéèë]")
+                            .replaceAll("[iíìï]", "[iíìï]")
+                            .replaceAll("[oóòö]", "[oóòö]")
+                            .replaceAll("[uúùü]", "[uúùü]") + ".*";
+                    
                     JSONObject selector = new JSONObject();
-                    selector.put("selector", new JSONObject().put("nombre", new JSONObject().put("$regex", "(?i)" + query)));
+                    // Buscamos en múltiples campos para mayor efectividad
+                    JSONArray orArray = new JSONArray();
+                    orOrArray(orArray, "nombre", regexQuery);
+                    orOrArray(orArray, "presentacion", regexQuery);
+                    orOrArray(orArray, "enfermedad_objetivo", regexQuery);
+                    
+                    selector.put("selector", new JSONObject().put("$or", orArray));
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);
@@ -192,13 +236,17 @@ public class HomeActivity extends AppCompatActivity {
                         return;
                     }
                 }
-                // Cache si offline
-                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(query, false);
+                // Cache si offline (el DBHelper ya maneja la flexibilidad con cleanQuery)
+                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(cleanQuery, false);
                 runOnUiThread(() -> mostrarResultadosBusqueda(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("HomeAct", "Error busqueda", e);
             }
         }).start();
+    }
+
+    private void orOrArray(JSONArray arr, String field, String regex) throws Exception {
+        arr.put(new JSONObject().put(field, new JSONObject().put("$regex", regex)));
     }
 
     private void mostrarResultadosBusqueda(JSONArray docs) {

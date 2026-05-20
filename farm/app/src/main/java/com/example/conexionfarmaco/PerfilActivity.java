@@ -115,6 +115,7 @@ public class PerfilActivity extends AppCompatActivity {
                         
                         if (resJson.has("docs")) {
                             JSONArray docs = resJson.getJSONArray("docs");
+                            db.limpiarPedidosUsuario(userEmail);
                             for (int i = 0; i < docs.length(); i++) {
                                 db.guardarPedidoLocal(docs.getJSONObject(i));
                             }
@@ -406,28 +407,10 @@ public class PerfilActivity extends AppCompatActivity {
             }
 
             if (!fotoPath.isEmpty() && imgPerfil != null) {
-                cargarImagenDesdeRuta(fotoPath);
+                Utilidades.cargarImagenBase64(fotoPath, imgPerfil);
             }
         } catch (Exception e) {
             Log.e("Perfil", "Error UI", e);
-        }
-    }
-
-    private void cargarImagenDesdeRuta(String ruta) {
-        try {
-            if (ruta.startsWith("content://")) {
-                imgPerfil.setImageURI(Uri.parse(ruta));
-            } else {
-                File file = new File(ruta);
-                if (file.exists()) {
-                    Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
-                    imgPerfil.setImageBitmap(bitmap);
-                } else {
-                    imgPerfil.setImageResource(R.mipmap.ic_launcher);
-                }
-            }
-        } catch (Exception e) {
-            imgPerfil.setImageResource(R.mipmap.ic_launcher);
         }
     }
 
@@ -481,7 +464,7 @@ public class PerfilActivity extends AppCompatActivity {
             if (requestCode == REQUEST_IMAGE_CAPTURE) {
                 // urlFoto ya tiene la ruta del archivo creado
                 subirFoto();
-                cargarImagenDesdeRuta(urlFoto);
+                Utilidades.cargarImagenBase64(urlFoto, imgPerfil);
             } else if (requestCode == REQUEST_IMAGE_PICK && data != null) {
                 Uri selectedImage = data.getData();
                 if (selectedImage != null) {
@@ -509,7 +492,7 @@ public class PerfilActivity extends AppCompatActivity {
             
             urlFoto = file.getAbsolutePath();
             subirFoto();
-            cargarImagenDesdeRuta(urlFoto);
+            Utilidades.cargarImagenBase64(urlFoto, imgPerfil);
         } catch (Exception e) {
             Log.e("Perfil", "Error guardando local", e);
         }
@@ -531,7 +514,11 @@ public class PerfilActivity extends AppCompatActivity {
 
 
     private void cerrarSesion() {
-        getSharedPreferences("UserPrefs", MODE_PRIVATE).edit().clear().apply();
+        // Solo eliminar la sesión activa, NO los datos de biometría (lastUserData)
+        getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                .remove("userData")
+                .apply();
+
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);

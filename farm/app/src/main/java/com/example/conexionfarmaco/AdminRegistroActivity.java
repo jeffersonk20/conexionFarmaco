@@ -4,6 +4,8 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -34,7 +36,7 @@ public class AdminRegistroActivity extends AppCompatActivity {
     private EditText etEmpresa, etDireccion, etTelefono, etCorreo, etDescripcion, etPass, etPassConfirm;
     private Button btnGuardar;
     private ImageView imgFoto;
-    private String urlFoto = "";
+    private String urlFoto = "", base64Foto = "";
 
     private static final int REQUEST_CAMERA_PERMISSION = 100;
     private static final int REQUEST_IMAGE_CAPTURE = 1;
@@ -108,49 +110,58 @@ public class AdminRegistroActivity extends AppCompatActivity {
         if (resultCode == RESULT_OK) {
             if (requestCode == REQUEST_IMAGE_CAPTURE) {
                 imgFoto.setPadding(0,0,0,0);
-                imgFoto.setImageURI(Uri.parse(urlFoto));
+                procesarYMostrarImagen(Uri.fromFile(new File(urlFoto)));
             } else if (requestCode == REQUEST_IMAGE_PICK && data != null) {
                 Uri selectedImage = data.getData();
                 if (selectedImage != null) {
-                    guardarImagenLocalmente(selectedImage);
+                    procesarYMostrarImagen(selectedImage);
                 }
             }
         }
     }
 
-    private void guardarImagenLocalmente(Uri uri) {
+    private void procesarYMostrarImagen(Uri uri) {
         try {
-            InputStream inputStream = getContentResolver().openInputStream(uri);
-            File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            File file = new File(storageDir, "LOGO_FARM_" + timeStamp + ".jpg");
-
-            OutputStream outputStream = new FileOutputStream(file);
-            byte[] buffer = new byte[1024];
-            int length;
-            if (inputStream != null) {
-                while ((length = inputStream.read(buffer)) > 0) {
-                    outputStream.write(buffer, 0, length);
-                }
-                outputStream.close();
-                inputStream.close();
-                urlFoto = file.getAbsolutePath();
-                imgFoto.setPadding(0,0,0,0);
-                imgFoto.setImageURI(Uri.fromFile(file));
+            InputStream is = getContentResolver().openInputStream(uri);
+            Bitmap bitmap = android.graphics.BitmapFactory.decodeStream(is);
+            
+            // Redimensionar para optimizar memoria y red
+            int maxSize = 500;
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            float ratio = (float) width / (float) height;
+            if (ratio > 1) {
+                width = maxSize;
+                height = (int) (width / ratio);
+            } else {
+                height = maxSize;
+                width = (int) (height * ratio);
             }
+            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, width, height, true);
+            
+            imgFoto.setPadding(0,0,0,0);
+            imgFoto.setImageBitmap(scaled);
+            
+            // Convertir a Base64
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+            byte[] bytes = baos.toByteArray();
+            base64Foto = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+            
         } catch (Exception e) {
-            Toast.makeText(this, "Error al guardar imagen", Toast.LENGTH_SHORT).show();
+            Log.e("AdminRegistro", "Error procesando imagen", e);
+            Toast.makeText(this, "Error al cargar la imagen", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void registrarFarmacia() {
-        String emp = etEmpresa.getText().toString();
-        String dir = etDireccion.getText().toString();
-        String tel = etTelefono.getText().toString();
-        String cor = etCorreo.getText().toString();
-        String des = etDescripcion.getText().toString();
-        String cla = etPass.getText().toString();
-        String con = etPassConfirm.getText().toString();
+        String emp = etEmpresa.getText().toString().trim();
+        String dir = etDireccion.getText().toString().trim();
+        String tel = etTelefono.getText().toString().trim();
+        String cor = etCorreo.getText().toString().trim();
+        String des = etDescripcion.getText().toString().trim();
+        String cla = etPass.getText().toString().trim();
+        String con = etPassConfirm.getText().toString().trim();
 
         if (emp.isEmpty() || cor.isEmpty() || cla.isEmpty()) {
             Toast.makeText(this, "Complete los campos obligatorios", Toast.LENGTH_SHORT).show();
@@ -173,12 +184,12 @@ public class AdminRegistroActivity extends AppCompatActivity {
                 json.put("correo", cor);
                 json.put("descripcion", des);
                 json.put("clave", cla);
-                json.put("foto", urlFoto);
+                json.put("foto", base64Foto);
                 json.put("tipo", "farmacia");
 
                 DBHelper dbHelper = new DBHelper(this);
-                // Guardar localmente con TODOS los campos para login offline y visualización en perfil
-                dbHelper.administrarFarmacias("nuevo", new String[]{id, emp, dir, tel, cor, cla, urlFoto, des});
+                // Guardar localmente con la imagen en Base64 para que sea visible offline
+                dbHelper.administrarFarmacias("nuevo", new String[]{id, emp, dir, tel, cor, cla, base64Foto, des});
 
                 if (Utilidades.hayInternet(this)) {
                     TareaServidor tarea = new TareaServidor();

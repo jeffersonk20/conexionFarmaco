@@ -51,6 +51,7 @@ public class HistorialPedidosActivity extends AppCompatActivity {
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
                         DBHelper db = new DBHelper(this);
+                        db.limpiarPedidosUsuario(userEmail);
                         for (int i = 0; i < docs.length(); i++) db.guardarPedidoLocal(docs.getJSONObject(i));
                         runOnUiThread(() -> mostrarHistorial(docs));
                         return;
@@ -82,11 +83,15 @@ public class HistorialPedidosActivity extends AppCompatActivity {
         TextView tvEstado = card.findViewById(R.id.tvHistEstado);
         LinearLayout containerItems = card.findViewById(R.id.containerItemsHistorial);
         Button btnGuardar = card.findViewById(R.id.btnActualizarPedido);
+        Button btnRepetir = card.findViewById(R.id.btnRepetirPedido);
         
+        String estado = pedido.optString("estado", "Pendiente");
         tvFecha.setText("Fecha: " + pedido.optString("fecha", ""));
-        tvEstado.setText(pedido.optString("estado", "Pendiente"));
+        tvEstado.setText(estado);
+        tvEstado.setTextColor(android.graphics.Color.parseColor(Utilidades.getEstadoPedidoColor(estado)));
         
         JSONArray items = pedido.getJSONArray("items");
+        // ... (resto del código de carga de items)
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = items.getJSONObject(i);
             View itemView = getLayoutInflater().inflate(R.layout.item_carrito, containerItems, false);
@@ -128,9 +133,38 @@ public class HistorialPedidosActivity extends AppCompatActivity {
         }
 
         btnGuardar.setOnClickListener(v -> actualizarPedido(pedido));
+        btnRepetir.setOnClickListener(v -> repetirPedido(pedido));
         card.findViewById(R.id.btnCancelarPedido).setOnClickListener(v -> cancelarPedido(pedido));
 
         containerHistorial.addView(card);
+    }
+
+    private void repetirPedido(JSONObject pedido) {
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences("CartPrefs", MODE_PRIVATE);
+            String cartStr = prefs.getString("cart", "[]");
+            JSONArray cart = new JSONArray(cartStr);
+            JSONArray itemsNuevos = pedido.getJSONArray("items");
+
+            for (int i = 0; i < itemsNuevos.length(); i++) {
+                JSONObject itemNuevo = itemsNuevos.getJSONObject(i);
+                boolean existe = false;
+                for (int j = 0; j < cart.length(); j++) {
+                    if (cart.getJSONObject(j).getString("_id").equals(itemNuevo.getString("_id"))) {
+                        cart.getJSONObject(j).put("cantidad", cart.getJSONObject(j).getInt("cantidad") + itemNuevo.getInt("cantidad"));
+                        existe = true;
+                        break;
+                    }
+                }
+                if (!existe) cart.put(itemNuevo);
+            }
+
+            prefs.edit().putString("cart", cart.toString()).apply();
+            Toast.makeText(this, "Productos agregados al carrito", Toast.LENGTH_SHORT).show();
+            startActivity(new android.content.Intent(this, CarritoActivity.class));
+        } catch (Exception e) {
+            Toast.makeText(this, "Error al repetir pedido", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void actualizarPedido(JSONObject pedido) {
@@ -161,19 +195,34 @@ public class HistorialPedidosActivity extends AppCompatActivity {
     private void cancelarPedido(JSONObject pedido) {
         new Thread(() -> {
             try {
-                // Para eliminar en CouchDB enviamos el documento con _deleted: true via PUT al ID
-                pedido.put("_deleted", true);
-                String urlDelete = Utilidades.url_pedidos + "/" + pedido.getString("_id");
+                String id = pedido.getString("_id");
+                DBHelper db = new DBHelper(this);
                 
-                TareaServidor tarea = new TareaServidor();
-                tarea.execute(pedido.toString(), "PUT", urlDelete).get();
-                
+                // 1. ELIMINAR LOCALMENTE SIEMPRE E INMEDIATAMENTE
+                db.eliminarPedidoLocal(id);
+
+                // 2. Refrescar la interfaz para que desaparezca YA
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Reserva cancelada con éxito", Toast.LENGTH_SHORT).show();
-                    cargarHistorial();
+                    Toast.makeText(this, "Reserva cancelada localmente", Toast.LENGTH_SHORT).show();
+                    cargarHistorial(); // Esto recargará la lista desde el SQLite ya sin el pedido
                 });
+
+                if (Utilidades.hayInternet(this)) {
+                    // 3a. Con internet: Sincronizar borrado con CouchDB
+                    pedido.put("_deleted", true);
+                    String urlDelete = Utilidades.url_pedidos + "/" + id;
+                    TareaServidor tarea = new TareaServidor();
+                    tarea.execute(pedido.toString(), "PUT", urlDelete).get();
+                    Log.d("Historial", "Pedido eliminado en la nube");
+                } else {
+                    // 3b. Sin internet: Encolar para el WorkManager
+                    pedido.put("_deleted", true);
+                    String urlDelete = Utilidades.url_pedidos + "/" + id;
+                    db.agregarPendiente(urlDelete, "PUT", pedido.toString(), "couchdb");
+                    Log.d("Historial", "Borrado encolado para sincronización posterior");
+                }
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Error al cancelar", Toast.LENGTH_SHORT).show());
+                Log.e("Historial", "Error al cancelar", e);
             }
         }).start();
     }
