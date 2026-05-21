@@ -23,6 +23,7 @@ public class AdminHomeActivity extends AppCompatActivity {
 
     private TextView tvNombreFarmacia, tvSinMedicamentos;
     private TextView tvStatPedidos, tvStatStockBajo;
+    private ImageView ivLogo;
     private LinearLayout containerMedicamentos;
     private EditText etBuscador;
     private String farmaciaId;
@@ -37,6 +38,7 @@ public class AdminHomeActivity extends AppCompatActivity {
         tvSinMedicamentos = findViewById(R.id.tvAdminSinMedicamentos);
         tvStatPedidos = findViewById(R.id.tvStatPedidos);
         tvStatStockBajo = findViewById(R.id.tvStatStockBajo);
+        ivLogo = findViewById(R.id.ivAdminHomeLogo);
         
         containerMedicamentos = findViewById(R.id.containerMedicamentosAdmin);
         etBuscador = findViewById(R.id.etAdminBuscadorMedicamento);
@@ -44,6 +46,11 @@ public class AdminHomeActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences("AdminPrefs", MODE_PRIVATE);
         farmaciaId = prefs.getString("farmaciaId", "");
         tvNombreFarmacia.setText(prefs.getString("farmaciaNombre", "Mi Farmacia"));
+
+        String fotoBase64 = prefs.getString("farmaciaFoto", "");
+        if (!fotoBase64.isEmpty()) {
+            Utilidades.cargarImagenBase64(fotoBase64, ivLogo);
+        }
 
         FloatingActionButton fab = findViewById(R.id.fabAgregarMedicamento);
         fab.setOnClickListener(v -> {

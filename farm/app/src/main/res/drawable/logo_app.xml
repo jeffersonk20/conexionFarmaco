@@ -1,0 +1,55 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Fondo del mapa circular (simplificado) -->
+    <path
+        android:fillColor="#F0F4F7"
+        android:pathData="M100,100m-90,0a90,90 0,1 1,180 0a90,90 0,1 1,-180 0" />
+
+    <!-- Líneas de conexión (sólidas para compatibilidad) -->
+    <path
+        android:strokeColor="#27AE60"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M100,80 L55,55 M100,80 L145,55 M100,80 L55,125 M100,80 L145,125" />
+
+    <!-- Pin Central -->
+    <path android:pathData="M100,140C100,140 70,110 70,85A30,30 0,1 1,130,85C130,110 100,140 100,140Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startY="55"
+                android:startX="100"
+                android:endY="140"
+                android:endX="100"
+                android:type="linear">
+                <item android:offset="0" android:color="#2ECC71" />
+                <item android:offset="1" android:color="#16A085" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Cruz Blanca Central -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M100,75 L100,95 M90,85 L110,85"
+        android:strokeWidth="5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round" />
+
+    <!-- 4 Círculos de Farmacias -->
+    <path android:fillColor="#27AE60" android:pathData="M55,55m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+    <path android:fillColor="#27AE60" android:pathData="M145,55m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+    <path android:fillColor="#27AE60" android:pathData="M55,125m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+    <path android:fillColor="#27AE60" android:pathData="M145,125m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+
+    <!-- Iconos de casita/farmacia dentro de los círculos (simplificados) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M50,58 L55,52 L60,58 L60,62 L50,62 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M140,58 L145,52 L150,58 L150,62 L140,62 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M50,128 L55,122 L60,128 L60,132 L50,132 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M140,128 L145,122 L150,128 L150,132 L140,132 Z" />
+
+</vector>

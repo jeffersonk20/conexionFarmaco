@@ -80,11 +80,12 @@
                     app:cardCornerRadius="45dp"
                     app:cardElevation="4dp">
                     <ImageView
+                        android:id="@+id/ivAdminHomeLogo"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:src="@mipmap/ic_launcher"
-                        android:padding="12dp"
-                        android:scaleType="centerInside"
+                        android:src="@drawable/logo_app"
+                        android:padding="0dp"
+                        android:scaleType="centerCrop"
                         android:contentDescription="Logo" />
                 </androidx.cardview.widget.CardView>
 
