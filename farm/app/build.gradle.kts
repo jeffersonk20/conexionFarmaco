@@ -47,6 +47,8 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.generative.ai)
+    implementation(libs.guava)
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)

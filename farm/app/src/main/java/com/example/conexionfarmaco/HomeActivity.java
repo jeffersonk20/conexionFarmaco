@@ -93,6 +93,11 @@ public class HomeActivity extends AppCompatActivity {
         // Intentar sincronizar datos pendientes
         Utilidades.sincronizar(this);
 
+        // Abrir Chat IA
+        findViewById(R.id.fab_chat_ia).setOnClickListener(v -> {
+            startActivity(new Intent(this, ChatIAActivity.class));
+        });
+
         // Configurar buscador
         if (etBuscador != null) {
             etBuscador.addTextChangedListener(new android.text.TextWatcher() {

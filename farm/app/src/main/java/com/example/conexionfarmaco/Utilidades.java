@@ -7,11 +7,35 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.util.Base64;
 import android.widget.ImageView;
+
 import org.json.JSONObject;
+
+import java.util.ArrayList;
 import java.util.List;
 import android.util.Log;
 
+import com.google.ai.client.generativeai.GenerativeModel;
+import com.google.ai.client.generativeai.java.GenerativeModelFutures;
+import com.google.ai.client.generativeai.type.Content;
+import com.google.ai.client.generativeai.type.GenerateContentResponse;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.FutureCallback;
+
+import androidx.work.Constraints;
+import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
+import androidx.work.ExistingWorkPolicy;
+
+import com.google.ai.client.generativeai.type.BlockThreshold;
+import com.google.ai.client.generativeai.type.HarmCategory;
+import com.google.ai.client.generativeai.type.SafetySetting;
+import com.google.ai.client.generativeai.type.RequestOptions;
+import java.util.Collections;
+
 public class Utilidades {
+    // ... URLs ...
     static String url_consulta = "http://192.168.101.10:5984/usuarios/_design/usuarios/_view/usuarios";
     static String url_mto = "http://192.168.101.10:5984/usuarios";
     static String url_find = "http://192.168.101.10:5984/usuarios/_find";
@@ -30,6 +54,86 @@ public class Utilidades {
     static String passwd = "200612";
     static String credencialesCodificadas = Base64.encodeToString((user + ":" + passwd).getBytes(), Base64.NO_WRAP);
 
+    private static final String GEMINI_API_KEY = "AIzaSyA4ABeoJUsYPHPZ8YL1nNym8q1cx7_pCU4";
+
+    public static GenerativeModelFutures getGeminiModel() {
+        // Siguiendo la recomendación de actualización para 2026:
+        // Se utiliza gemini-2.5-flash como modelo estable.
+        RequestOptions requestOptions = new RequestOptions(60000L, "v1");
+
+        GenerativeModel gm = new GenerativeModel(
+                "gemini-2.5-flash",
+                GEMINI_API_KEY,
+                null, // generationConfig
+                null, // safetySettings
+                requestOptions
+        );
+        return GenerativeModelFutures.from(gm);
+    }
+
+    public static void consultarIA(Context context, String preguntaCliente, FutureCallback<GenerateContentResponse> callback) {
+        GenerativeModelFutures model = getGeminiModel();
+
+        // Obtener inventario de medicamentos filtrado por la pregunta del cliente para ahorrar tokens
+        StringBuilder inventario = new StringBuilder();
+        try {
+            DBHelper db = new DBHelper(context);
+            // Intentamos buscar palabras clave de la pregunta en el inventario
+            String[] palabras = preguntaCliente.toLowerCase().split("\\s+");
+            List<JSONObject> todosLosMedicamenteos = db.obtenerMedicamentosCache(null, false);
+            List<JSONObject> relevantes = new ArrayList<>();
+
+            for (JSONObject med : todosLosMedicamenteos) {
+                String nombre = med.optString("nombre", "").toLowerCase();
+                for (String palabra : palabras) {
+                    if (palabra.length() > 3 && nombre.contains(palabra)) {
+                        relevantes.add(med);
+                        break;
+                    }
+                }
+            }
+
+            // Si no encontramos específicos, incluimos una muestra o informamos
+            if (relevantes.isEmpty() && todosLosMedicamenteos.size() < 50) {
+                relevantes.addAll(todosLosMedicamenteos); // Si son pocos, mandamos todos
+            }
+
+            if (!relevantes.isEmpty()) {
+                inventario.append("\nInventario de medicamentos encontrados/relevantes:\n");
+                for (JSONObject med : relevantes) {
+                    inventario.append("- ").append(med.optString("nombre"))
+                            .append(" (").append(med.optString("presentacion")).append(")")
+                            .append(" en ").append(med.optString("nombre_farmacia"))
+                            .append(". Precio: $").append(med.optString("precio"))
+                            .append(". Stock: ").append(med.optString("stock")).append(" unidades.\n");
+                }
+            } else {
+                inventario.append("\nNo se encontraron medicamentos que coincidan específicamente en el inventario local.");
+            }
+        } catch (Exception e) {
+            Log.e("IA", "Error obteniendo inventario", e);
+        }
+
+        String prompt = "Eres un asistente experto de la farmacia 'Conexión Fármaco'. " +
+                "Tu objetivo es ayudar al cliente con información sobre medicamentos y síntomas." +
+                inventario +
+                "\n\nInstrucción: Si el cliente pregunta por un medicamento, revisa la lista de arriba. " +
+                "Si está disponible y tiene stock > 0, dile en qué farmacia está y el precio. " +
+                "Si no está en la lista o el stock es 0, dile que no hay existencias por ahora. " +
+                "\n\nPregunta: " + preguntaCliente;
+
+        Content content = new Content.Builder()
+                .addText(prompt)
+                .build();
+
+        ListenableFuture<GenerateContentResponse> response = model.generateContent(content);
+        Futures.addCallback(
+                response,
+                callback,
+                java.util.concurrent.Executors.newSingleThreadExecutor()
+        );
+    }
+
     public static String generarId() {
         return java.util.UUID.randomUUID().toString();
     }
@@ -41,18 +145,18 @@ public class Utilidades {
     }
 
     public static void sincronizar(Context context) {
-        androidx.work.Constraints constraints = new androidx.work.Constraints.Builder()
-                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
 
-        androidx.work.OneTimeWorkRequest syncRequest =
-                new androidx.work.OneTimeWorkRequest.Builder(SyncWorker.class)
+        OneTimeWorkRequest syncRequest =
+                new OneTimeWorkRequest.Builder(SyncWorker.class)
                         .setConstraints(constraints)
                         .build();
 
-        androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+        WorkManager.getInstance(context).enqueueUniqueWork(
                 "SincronizacionUnica",
-                androidx.work.ExistingWorkPolicy.REPLACE,
+                ExistingWorkPolicy.REPLACE,
                 syncRequest
         );
         Log.d("Sync", "Tarea de sincronización encolada (Única)");
@@ -68,7 +172,6 @@ public class Utilidades {
         }
     }
 
-
     public static String normalizar(String texto) {
         if (texto == null) return "";
         return java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
@@ -80,18 +183,14 @@ public class Utilidades {
         if (base64 == null || base64.isEmpty()) return;
 
         try {
-            // Limpiar filtros y padding previos
             iv.setColorFilter(null);
             iv.setPadding(0, 0, 0, 0);
 
-            // 1. Manejar URIs directas (galería, cámara, etc.)
             if (base64.startsWith("content://") || base64.startsWith("file://")) {
                 iv.setImageURI(android.net.Uri.parse(base64));
                 return;
             }
 
-            // 2. Manejar rutas de archivos locales (que empiecen por /)
-            // Solo si la cadena es corta (una ruta no suele ser tan larga como un Base64)
             if (base64.startsWith("/") && base64.length() < 1000) {
                 java.io.File file = new java.io.File(base64);
                 if (file.exists()) {
@@ -103,13 +202,11 @@ public class Utilidades {
                 }
             }
 
-            // 3. Procesar como Base64 (para fotos guardadas en la nube)
             String pureBase64 = base64;
             if (pureBase64.contains(",")) {
                 pureBase64 = pureBase64.split(",")[1];
             }
 
-            // Limpieza total de espacios y saltos de línea para evitar corrupción
             pureBase64 = pureBase64.trim().replaceAll("\\s+", "");
 
             byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT);
@@ -121,5 +218,4 @@ public class Utilidades {
             Log.e("Utilidades", "Error cargando imagen: " + e.getMessage());
         }
     }
-
 }

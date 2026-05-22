@@ -66,6 +66,7 @@
             android:name=".FacturacionActivity"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ResumenPedidoActivity" />
+        <activity android:name=".ChatIAActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
