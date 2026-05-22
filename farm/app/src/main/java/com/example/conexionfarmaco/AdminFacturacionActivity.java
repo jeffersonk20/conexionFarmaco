@@ -17,6 +17,7 @@ public class AdminFacturacionActivity extends AppCompatActivity {
 
     private LinearLayout containerReservas, containerPagosOnline;
     private Button btnVerReservas, btnVerPagos;
+    private android.widget.ProgressBar progressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,6 +28,7 @@ public class AdminFacturacionActivity extends AppCompatActivity {
         containerPagosOnline = findViewById(R.id.containerPagosOnline);
         btnVerReservas = findViewById(R.id.btnVerReservas);
         btnVerPagos = findViewById(R.id.btnVerPagos);
+        progressBar = findViewById(R.id.pbAdminFact);
         
         findViewById(R.id.btnAdminFactAtras).setOnClickListener(v -> finish());
 
@@ -71,6 +73,8 @@ public class AdminFacturacionActivity extends AppCompatActivity {
     private void cargarPedidos() {
         String farmaciaId = getSharedPreferences("AdminPrefs", MODE_PRIVATE).getString("farmaciaId", "");
         if (farmaciaId.isEmpty()) return;
+
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
 
         new Thread(() -> {
             try {
@@ -120,6 +124,8 @@ public class AdminFacturacionActivity extends AppCompatActivity {
     }
 
     private void mostrarPedidos(JSONArray docs, String farmaciaId) {
+        if (progressBar != null) progressBar.setVisibility(View.GONE);
+
         containerReservas.removeAllViews();
         containerPagosOnline.removeAllViews();
         
