@@ -54,84 +54,58 @@ public class Utilidades {
     static String passwd = "200612";
     static String credencialesCodificadas = Base64.encodeToString((user + ":" + passwd).getBytes(), Base64.NO_WRAP);
 
-    private static final String GEMINI_API_KEY = "AIzaSyA4ABeoJUsYPHPZ8YL1nNym8q1cx7_pCU4";
+    private static final String GEMINI_API_KEY = "#";
+
+    private static GenerativeModelFutures modelInstance;
 
     public static GenerativeModelFutures getGeminiModel() {
-        // Siguiendo la recomendación de actualización para 2026:
-        // Se utiliza gemini-2.5-flash como modelo estable.
-        RequestOptions requestOptions = new RequestOptions(60000L, "v1");
-
-        GenerativeModel gm = new GenerativeModel(
-                "gemini-2.5-flash",
-                GEMINI_API_KEY,
-                null, // generationConfig
-                null, // safetySettings
-                requestOptions
-        );
-        return GenerativeModelFutures.from(gm);
+        if (modelInstance == null) {
+            RequestOptions requestOptions = new RequestOptions(60000L, "v1");
+            GenerativeModel gm = new GenerativeModel(
+                    "gemini-2.5-flash",
+                    GEMINI_API_KEY,
+                    null, // generationConfig
+                    null, // safetySettings
+                    requestOptions
+            );
+            modelInstance = GenerativeModelFutures.from(gm);
+        }
+        return modelInstance;
     }
 
     public static void consultarIA(Context context, String preguntaCliente, FutureCallback<GenerateContentResponse> callback) {
         GenerativeModelFutures model = getGeminiModel();
 
-        // Obtener inventario de medicamentos filtrado por la pregunta del cliente para ahorrar tokens
         StringBuilder inventario = new StringBuilder();
         try {
             DBHelper db = new DBHelper(context);
-            // Intentamos buscar palabras clave de la pregunta en el inventario
-            String[] palabras = preguntaCliente.toLowerCase().split("\\s+");
-            List<JSONObject> todosLosMedicamenteos = db.obtenerMedicamentosCache(null, false);
-            List<JSONObject> relevantes = new ArrayList<>();
-
-            for (JSONObject med : todosLosMedicamenteos) {
+            List<JSONObject> todos = db.obtenerMedicamentosCache(null, false);
+            
+            // Filtro ultra-rápido: solo enviamos lo que coincida con la pregunta
+            int encontrados = 0;
+            String q = preguntaCliente.toLowerCase();
+            for (JSONObject med : todos) {
+                if (encontrados >= 10) break; // Límite estricto de 10 items para no agotar cuota
                 String nombre = med.optString("nombre", "").toLowerCase();
-                for (String palabra : palabras) {
-                    if (palabra.length() > 3 && nombre.contains(palabra)) {
-                        relevantes.add(med);
-                        break;
-                    }
-                }
-            }
-
-            // Si no encontramos específicos, incluimos una muestra o informamos
-            if (relevantes.isEmpty() && todosLosMedicamenteos.size() < 50) {
-                relevantes.addAll(todosLosMedicamenteos); // Si son pocos, mandamos todos
-            }
-
-            if (!relevantes.isEmpty()) {
-                inventario.append("\nInventario de medicamentos encontrados/relevantes:\n");
-                for (JSONObject med : relevantes) {
+                if (q.contains(nombre) || nombre.contains(q)) {
                     inventario.append("- ").append(med.optString("nombre"))
-                            .append(" (").append(med.optString("presentacion")).append(")")
+                            .append(": $").append(med.optString("precio"))
                             .append(" en ").append(med.optString("nombre_farmacia"))
-                            .append(". Precio: $").append(med.optString("precio"))
-                            .append(". Stock: ").append(med.optString("stock")).append(" unidades.\n");
+                            .append(" (Stock: ").append(med.optString("stock")).append(")\n");
+                    encontrados++;
                 }
-            } else {
-                inventario.append("\nNo se encontraron medicamentos que coincidan específicamente en el inventario local.");
             }
         } catch (Exception e) {
-            Log.e("IA", "Error obteniendo inventario", e);
+            Log.e("IA", "Error", e);
         }
 
-        String prompt = "Eres un asistente experto de la farmacia 'Conexión Fármaco'. " +
-                "Tu objetivo es ayudar al cliente con información sobre medicamentos y síntomas." +
-                inventario +
-                "\n\nInstrucción: Si el cliente pregunta por un medicamento, revisa la lista de arriba. " +
-                "Si está disponible y tiene stock > 0, dile en qué farmacia está y el precio. " +
-                "Si no está en la lista o el stock es 0, dile que no hay existencias por ahora. " +
-                "\n\nPregunta: " + preguntaCliente;
+        String prompt = "Eres farmacéutico. Inventario actual:\n" + inventario +
+                "\nInstrucción: Si el producto está arriba con stock > 0, di dónde está y precio. Si no está, di que no hay. No uses asteriscos ni negritas. Sé breve.\n" +
+                "Pregunta: " + preguntaCliente;
 
-        Content content = new Content.Builder()
-                .addText(prompt)
-                .build();
-
+        Content content = new Content.Builder().addText(prompt).build();
         ListenableFuture<GenerateContentResponse> response = model.generateContent(content);
-        Futures.addCallback(
-                response,
-                callback,
-                java.util.concurrent.Executors.newSingleThreadExecutor()
-        );
+        Futures.addCallback(response, callback, java.util.concurrent.Executors.newSingleThreadExecutor());
     }
 
     public static String generarId() {

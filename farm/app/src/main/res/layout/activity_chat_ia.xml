@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/azul_fondo">
+    android:background="@color/azul_fondo"
+    android:fitsSystemWindows="true">
 
     <View
         android:id="@+id/top_bar"
         android:layout_width="match_parent"
         android:layout_height="60dp"
-        android:background="@color/azul_primario"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:background="@color/azul_primario" />
 
     <ImageButton
         android:id="@+id/btn_back"
@@ -18,42 +18,33 @@
         android:layout_height="48dp"
         android:layout_marginStart="8dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Regresar"
         android:src="@android:drawable/ic_menu_revert"
-        app:layout_constraintBottom_toBottomOf="@id/top_bar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@id/top_bar"
+        android:contentDescription="Regresar"
+        android:layout_alignTop="@id/top_bar"
+        android:layout_alignBottom="@id/top_bar"
         app:tint="@color/white" />
 
     <TextView
         android:id="@+id/title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
         android:text="Asistente Farmacéutico IA"
         android:textColor="@color/white"
         android:textSize="18sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="@id/top_bar"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@id/top_bar" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler_chat"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:padding="8dp"
-        app:layout_constraintBottom_toTopOf="@id/input_area"
-        app:layout_constraintTop_toBottomOf="@id/top_bar" />
+        android:layout_alignTop="@id/top_bar"
+        android:layout_alignBottom="@id/top_bar"
+        android:gravity="center" />
 
     <LinearLayout
         android:id="@+id/input_area"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
         android:background="@color/white"
         android:orientation="horizontal"
-        android:padding="8dp"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:padding="8dp">
 
         <EditText
             android:id="@+id/edit_query"
@@ -62,7 +53,13 @@
             android:layout_weight="1"
             android:background="@drawable/rounded_edittext"
             android:hint="Escribe tu consulta aquí..."
-            android:padding="12dp" />
+            android:padding="12dp"
+            android:inputType="textCapSentences|textAutoCorrect"
+            android:imeOptions="actionSend"
+            android:importantForAutofill="no"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:textSize="16sp" />
 
         <ImageButton
             android:id="@+id/btn_send"
@@ -70,19 +67,38 @@
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Enviar"
             android:src="@android:drawable/ic_menu_send"
+            android:contentDescription="Enviar"
             app:tint="@color/azul_primario" />
     </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_chat"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/input_area"
+        android:layout_below="@id/top_bar"
+        android:padding="8dp"
+        android:clipToPadding="false" />
 
     <ProgressBar
         android:id="@+id/progress_loading"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout_centerInParent="true"
+        android:visibility="gone" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <TextView
+        android:id="@+id/tv_countdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/input_area"
+        android:background="#FFF3CD"
+        android:gravity="center"
+        android:padding="4dp"
+        android:text="Espera 0s para preguntar de nuevo"
+        android:textColor="#856404"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+</RelativeLayout>
