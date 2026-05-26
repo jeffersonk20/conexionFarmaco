@@ -27,8 +27,8 @@ public class TareaServidor extends AsyncTask<String, String, String> {
             connection.setRequestProperty("Content-Type", "application/json");
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("Authorization", "Basic " + Utilidades.credencialesCodificadas);
-            connection.setConnectTimeout(10000); // 10 segundos de espera
-            connection.setReadTimeout(10000);
+            connection.setConnectTimeout(5000); // 5 segundos de espera (Local IP)
+            connection.setReadTimeout(5000);
 
             // Solo enviar cuerpo si no es GET y si hay datos reales que enviar
             if (!metodo.equals("GET") && jsonDatos != null && !jsonDatos.isEmpty()) {

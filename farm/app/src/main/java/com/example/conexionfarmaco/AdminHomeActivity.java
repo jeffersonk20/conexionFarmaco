@@ -65,6 +65,14 @@ public class AdminHomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, AdminFacturacionActivity.class));
         });
 
+        ImageView ivChat = findViewById(R.id.ivAdminChat);
+        if (prefs.getBoolean("chatHabilitado", false)) {
+            ivChat.setVisibility(View.VISIBLE);
+            ivChat.setOnClickListener(v -> {
+                startActivity(new Intent(this, ListaChatClientesActivity.class));
+            });
+        }
+
         findViewById(R.id.cardStockBajo).setOnClickListener(v -> {
             filtrarStockBajo();
         });

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/azul_fondo"
+    android:fitsSystemWindows="true">
+
+    <View
+        android:id="@+id/top_bar_chat"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@color/azul_primario" />
+
+    <ImageButton
+        android:id="@+id/btn_back_chat"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_menu_revert"
+        android:contentDescription="Regresar"
+        android:layout_alignTop="@id/top_bar_chat"
+        android:layout_alignBottom="@id/top_bar_chat"
+        app:tint="@color/white" />
+
+    <TextView
+        android:id="@+id/tvNombreReceptor"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:text="Chat"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_alignTop="@id/top_bar_chat"
+        android:layout_alignBottom="@id/top_bar_chat"
+        android:gravity="center" />
+
+    <LinearLayout
+        android:id="@+id/input_area_chat"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="@color/white"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <EditText
+            android:id="@+id/etMensajeChat"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/rounded_edittext"
+            android:hint="Escribe un mensaje..."
+            android:padding="12dp"
+            android:inputType="textCapSentences|textAutoCorrect"
+            android:imeOptions="actionSend"
+            android:importantForAutofill="no"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:textSize="16sp" />
+
+        <ImageButton
+            android:id="@+id/btnEnviarChat"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_send"
+            android:contentDescription="Enviar"
+            app:tint="@color/azul_primario" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvMensajes"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/input_area_chat"
+        android:layout_below="@id/top_bar_chat"
+        android:padding="8dp"
+        android:clipToPadding="false" />
+
+</RelativeLayout>

@@ -37,13 +37,58 @@ public class ResumenPedidoActivity extends AppCompatActivity {
 
         cargarDatosUsuario();
         calcularResumen();
+        
+        // Verificamos si venimos de un retorno de pago exitoso
+        verificarRetornoPago(getIntent());
 
         findViewById(R.id.btnResAtras).setOnClickListener(v -> finish());
         findViewById(R.id.btnResCancelar).setOnClickListener(v -> finish());
 
         findViewById(R.id.btnFinalizarPedido).setOnClickListener(v -> {
-            guardarPedido();
+            if ("tarjeta".equals(metodoPago)) {
+                // Si el método es tarjeta, solo abrimos la pasarela.
+                // NO guardamos el pedido todavía.
+                String referenciaPedido = Utilidades.generarId();
+                Utilidades.pagarConWompi(this, totalCalculado, referenciaPedido);
+                
+                Toast.makeText(this, "Redirigiendo a pago seguro...", Toast.LENGTH_SHORT).show();
+            } else {
+                guardarPedido();
+            }
         });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        verificarRetornoPago(intent);
+    }
+
+    private void verificarRetornoPago(Intent intent) {
+        if (intent != null && intent.getData() != null) {
+            android.net.Uri data = intent.getData();
+            String urlCompleta = data.toString();
+            Log.d("Wompi", "URL de retorno recibida: " + urlCompleta);
+
+            // Wompi SV devuelve 'esAprobada' como parámetro principal
+            String aprobado = data.getQueryParameter("esAprobada");
+            String idTransaccion = data.getQueryParameter("idTransaccion");
+            
+            // Detección flexible: 
+            // 1. Si el parámetro es explícitamente true
+            // 2. O si hay un id de transacción y no dice que falló
+            boolean esExito = "true".equalsIgnoreCase(aprobado) || 
+                             (idTransaccion != null && !urlCompleta.contains("false"));
+
+            if (esExito) {
+                Toast.makeText(this, "¡Pago Confirmado! Registrando su pedido...", Toast.LENGTH_LONG).show();
+                guardarPedido();
+            } else {
+                Log.w("Wompi", "El pago no fue aprobado. Parámetros: " + urlCompleta);
+                Toast.makeText(this, "El pago no se completó. Por favor intente de nuevo.", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private void calcularResumen() {
@@ -63,8 +108,8 @@ public class ResumenPedidoActivity extends AppCompatActivity {
                 subtotal += (precio * item.getInt("cantidad"));
             }
 
-            double envio = subtotal > 0 ? 5.00 : 0; // Tarifa fija de envío para el ejemplo
-            totalCalculado = subtotal + envio;
+            double envio = 0; // Se elimina el cobro de envío
+            totalCalculado = subtotal;
 
             tvSubtotal.setText(String.format(java.util.Locale.US, "US$ %.2f", subtotal));
             tvEnvio.setText(String.format(java.util.Locale.US, "US$ %.2f", envio));
@@ -115,7 +160,8 @@ public class ResumenPedidoActivity extends AppCompatActivity {
             pedido.put("metodo_pago", metodoPago);
             pedido.put("tipo", metodoPago.equals("efectivo") ? "reserva" : "pago_online");
             pedido.put("fecha", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date()));
-            pedido.put("estado", "Pendiente");
+            // Si es tarjeta y estamos en este punto, el pago ya se confirmó
+            pedido.put("estado", metodoPago.equals("tarjeta") ? "Pagado" : "Pendiente");
             pedido.put("tipo_doc", "pedido"); // Para facilitar filtros
 
 
@@ -178,11 +224,13 @@ public class ResumenPedidoActivity extends AppCompatActivity {
 
             getSharedPreferences("CartPrefs", MODE_PRIVATE).edit().putString("cart", "[]").apply();
             String msg = wasOffline ? "Guardado localmente. Se sincronizará al tener internet." : 
-                        (metodoPago.equals("efectivo") ? "¡Reserva realizada!" : "¡Pedido finalizado!");
+                        (metodoPago.equals("efectivo") ? "¡Reserva realizada!" : "¡Redirigiendo a pago!");
             
             Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+
+            // Redirigimos siempre al Historial de Pedidos después de un éxito
             finishAffinity();
-            startActivity(new Intent(this, HomeActivity.class));
+            startActivity(new Intent(this, HistorialPedidosActivity.class));
         });
     }
 

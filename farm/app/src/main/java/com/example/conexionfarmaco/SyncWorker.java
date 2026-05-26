@@ -27,6 +27,8 @@ public class SyncWorker extends Worker {
 
         boolean allSuccess = true;
         for (JSONObject p : pendientes) {
+            if (!Utilidades.hayInternet(context)) return Result.retry();
+
             String id_local = "";
             try {
                 id_local = p.getString("id_local");
@@ -50,7 +52,7 @@ public class SyncWorker extends Worker {
                             procesarExito(dbHelper, url, metodo, json, resJson);
                             dbHelper.eliminarPendiente(id_local);
                         } else if (esConflicto && metodo.equals("DELETE")) {
-                            // REINTENTO FORZADO PARA BORRADO: Obtener rev actual y re-intentar
+                            // ... (mismo código de reintento forzado)
                             Log.d("SyncWorker", "Conflicto en borrado, intentando forzar...");
                             String cleanUrl = url.contains("?") ? url.substring(0, url.indexOf("?")) : url;
                             String getRes = new TareaServidor().execute("", "GET", cleanUrl).get();
@@ -69,8 +71,13 @@ public class SyncWorker extends Worker {
                         } else {
                             Log.e("SyncWorker", "Error en tarea: " + res);
                             allSuccess = false;
+                            // Si es un error de red o de servidor, paramos el loop para no esperar timeouts innecesarios
+                            if (res.contains("Error de red")) return Result.retry();
                         }
-                    } else { allSuccess = false; }
+                    } else { 
+                        allSuccess = false;
+                        return Result.retry();
+                    }
                 } else if (tipo.equals("email")) {
                     enviarEmail(dbHelper, id_local, json);
                 }
@@ -93,7 +100,18 @@ public class SyncWorker extends Worker {
                 dbHelper.guardarMedicamentoLocal(localObj);
             } else if (url.contains("pedidos")) {
                 dbHelper.guardarPedidoLocal(localObj);
+            } else if (url.contains("farmacias")) {
+                dbHelper.guardarFarmaciaCache(localObj);
+            } else if (url.contains("usuarios")) {
+                String[] datos = {
+                    id_couch, nuevo_rev, localObj.optString("nombres"), localObj.optString("apellidos"),
+                    localObj.optString("telefono"), localObj.optString("correo"), localObj.optString("clave"),
+                    localObj.optString("direccion"), localObj.optString("alergias"), localObj.optString("tipo_sangre"),
+                    localObj.optString("enfermedades"), localObj.optString("foto")
+                };
+                dbHelper.administrarUsuarios("nuevo", datos);
             }
+
             if (!id_couch.isEmpty()) {
                 dbHelper.actualizarRevEnPendientes(id_couch, nuevo_rev);
             }

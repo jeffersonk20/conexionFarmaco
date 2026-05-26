@@ -34,6 +34,7 @@ import java.util.Locale;
 public class AdminRegistroActivity extends AppCompatActivity {
 
     private EditText etEmpresa, etDireccion, etTelefono, etCorreo, etDescripcion, etPass, etPassConfirm;
+    private com.google.android.material.switchmaterial.SwitchMaterial swChatHabilitado;
     private Button btnGuardar;
     private ImageView imgFoto;
     private String urlFoto = "", base64Foto = "";
@@ -52,6 +53,7 @@ public class AdminRegistroActivity extends AppCompatActivity {
         etTelefono = findViewById(R.id.etAdminTelefono);
         etCorreo = findViewById(R.id.etAdminCorreo);
         etDescripcion = findViewById(R.id.etAdminDescripcion);
+        swChatHabilitado = findViewById(R.id.swAdminChatHabilitado);
         etPass = findViewById(R.id.etAdminPass);
         etPassConfirm = findViewById(R.id.etAdminPassConfirm);
         btnGuardar = findViewById(R.id.btnAdminGuardarRegistro);
@@ -160,6 +162,7 @@ public class AdminRegistroActivity extends AppCompatActivity {
         String tel = etTelefono.getText().toString().trim();
         String cor = etCorreo.getText().toString().trim();
         String des = etDescripcion.getText().toString().trim();
+        boolean chatHab = swChatHabilitado.isChecked();
         String cla = etPass.getText().toString().trim();
         String con = etPassConfirm.getText().toString().trim();
 
@@ -183,13 +186,14 @@ public class AdminRegistroActivity extends AppCompatActivity {
                 json.put("telefono", tel);
                 json.put("correo", cor);
                 json.put("descripcion", des);
+                json.put("chat_habilitado", chatHab);
                 json.put("clave", cla);
                 json.put("foto", base64Foto);
                 json.put("tipo", "farmacia");
 
                 DBHelper dbHelper = new DBHelper(this);
                 // Guardar localmente con la imagen en Base64 para que sea visible offline
-                dbHelper.administrarFarmacias("nuevo", new String[]{id, "", emp, dir, tel, cor, cla, base64Foto, des});
+                dbHelper.administrarFarmacias("nuevo", new String[]{id, "", emp, dir, tel, cor, cla, base64Foto, des, chatHab ? "1" : "0"});
 
                 if (Utilidades.hayInternet(this)) {
                     TareaServidor tarea = new TareaServidor();

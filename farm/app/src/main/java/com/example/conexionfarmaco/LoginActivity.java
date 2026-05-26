@@ -81,24 +81,45 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
+        // Mostrar feedback de carga
+        btnIngresar.setEnabled(false);
+        btnIngresar.setText("Validando...");
+
         new Thread(() -> {
             try {
                 JSONObject selector = new JSONObject();
                 selector.put("selector", new JSONObject().put("correo", cor).put("clave", cla));
+                // Solo pedir lo que necesitamos para el objeto de usuario
+                JSONArray fields = new JSONArray();
+                fields.put("_id"); fields.put("_rev"); fields.put("nombres");
+                fields.put("apellidos"); fields.put("telefono"); fields.put("correo");
+                fields.put("direccion"); fields.put("alergias"); fields.put("tipo_sangre");
+                fields.put("enfermedades"); fields.put("foto");
+                selector.put("fields", fields);
+                selector.put("limit", 1);
                 
                 TareaServidor tarea = new TareaServidor();
                 String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
                 JSONObject resJson = new JSONObject(respuesta);
+
+                runOnUiThread(() -> {
+                    btnIngresar.setEnabled(true);
+                    btnIngresar.setText("Ingresar");
+                });
 
                 if (resJson.has("docs") && resJson.getJSONArray("docs").length() > 0) {
                     JSONObject userDoc = resJson.getJSONArray("docs").getJSONObject(0);
                     userDoc.put("clave", cla); // Guardar clave para uso offline
                     entrar(userDoc, true);
                 } else {
-                    loginLocal(cor, cla);
+                    runOnUiThread(() -> loginLocal(cor, cla));
                 }
             } catch (Exception e) {
-                loginLocal(cor, cla);
+                runOnUiThread(() -> {
+                    btnIngresar.setEnabled(true);
+                    btnIngresar.setText("Ingresar");
+                    loginLocal(cor, cla);
+                });
             }
         }).start();
     }

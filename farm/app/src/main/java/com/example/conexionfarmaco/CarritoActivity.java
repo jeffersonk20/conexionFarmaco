@@ -25,7 +25,9 @@ public class CarritoActivity extends AppCompatActivity {
         findViewById(R.id.btnCarritoAtras).setOnClickListener(v -> finish());
         
         findViewById(R.id.btnComprarTodo).setOnClickListener(v -> {
-            Intent intent = new Intent(this, PagoActivity.class);
+            // Saltamos la simulación de tarjeta local y vamos directo a Facturación
+            // El pago real se hará con Wompi al final del proceso
+            Intent intent = new Intent(this, FacturacionActivity.class);
             intent.putExtra("metodo_pago", "tarjeta");
             startActivity(intent);
         });

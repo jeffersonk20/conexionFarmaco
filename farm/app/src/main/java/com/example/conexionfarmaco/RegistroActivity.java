@@ -232,14 +232,14 @@ public class RegistroActivity extends AppCompatActivity {
 
     private void guardar() {
         try {
-            String nom = txtNombres.getText().toString();
-            String ape = txtApellidos.getText().toString();
-            String tel = txtTelefono.getText().toString();
-            String cor = txtCorreo.getText().toString();
-            String cla = txtClave.getText().toString();
-            String con = txtConfirmar.getText().toString();
-            String dir = txtDireccion.getText().toString();
-            String ale = txtAlergias.getText().toString();
+            String nom = txtNombres.getText().toString().trim();
+            String ape = txtApellidos.getText().toString().trim();
+            String tel = txtTelefono.getText().toString().trim();
+            String cor = txtCorreo.getText().toString().trim();
+            String cla = txtClave.getText().toString().trim();
+            String con = txtConfirmar.getText().toString().trim();
+            String dir = txtDireccion.getText().toString().trim();
+            String ale = txtAlergias.getText().toString().trim();
             String san = spSangre.getSelectedItem().toString();
             String enf = spEnfermedades.getSelectedItem().toString();
 

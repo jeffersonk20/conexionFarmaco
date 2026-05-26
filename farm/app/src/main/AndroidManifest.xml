@@ -65,10 +65,21 @@
         <activity
             android:name=".FacturacionActivity"
             android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".ResumenPedidoActivity" />
+        <activity android:name=".ResumenPedidoActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="pago-finalizado.com" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ChatIAActivity"
             android:windowSoftInputMode="adjustResize|stateVisible" />
+        <activity android:name=".ChatMensajeriaActivity" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ListaChatClientesActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

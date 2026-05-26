@@ -47,6 +47,18 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
                     fab.setVisibility(View.GONE);
                 }
 
+                // Lógica del Chat Directo
+                FloatingActionButton fabChat = findViewById(R.id.fabChat);
+                if (farmacia.optBoolean("chat_habilitado", false)) {
+                    fabChat.setVisibility(View.VISIBLE);
+                    fabChat.setOnClickListener(v -> {
+                        Intent intent = new Intent(this, ChatMensajeriaActivity.class);
+                        intent.putExtra("id_farmacia", farmaciaId);
+                        intent.putExtra("nombre_receptor", tvNombre.getText().toString());
+                        startActivity(intent);
+                    });
+                }
+
                 cargarMedicamentos();
             } catch (Exception e) {}
         }

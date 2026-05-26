@@ -14,7 +14,7 @@ import java.util.List;
 
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "conexion_farmaco.db";
-    private static final int DATABASE_VERSION = 14;
+    private static final int DATABASE_VERSION = 16;
 
     public DBHelper(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -24,9 +24,10 @@ public class DBHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE usuarios (id TEXT PRIMARY KEY, rev TEXT, nombres TEXT, apellidos TEXT, telefono TEXT, correo TEXT, clave TEXT, " +
                 "direccion TEXT, alergias TEXT, tipo_sangre TEXT, enfermedades TEXT, foto TEXT)");
-        db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, rev TEXT, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT)");
+        db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, rev TEXT, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT, chat_habilitado INTEGER DEFAULT 0)");
         db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, rev TEXT, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, foto2 TEXT, foto3 TEXT, nombre_farmacia TEXT, enfermedad_objetivo TEXT, is_deleted INTEGER DEFAULT 0)");
         db.execSQL("CREATE TABLE pedidos (id TEXT PRIMARY KEY, rev TEXT, cliente_correo TEXT, cliente_nombre TEXT, cliente_direccion TEXT, cliente_telefono TEXT, items TEXT, total TEXT, fecha TEXT, estado TEXT, metodo_pago TEXT, farmacias_ids TEXT)");
+        db.execSQL("CREATE TABLE mensajes (id TEXT PRIMARY KEY, rev TEXT, emisor TEXT, receptor TEXT, mensaje TEXT, fecha TEXT, id_farmacia TEXT, id_usuario TEXT, leido INTEGER DEFAULT 0, emisor_nombre TEXT, cliente_nombre_completo TEXT)");
         db.execSQL("CREATE TABLE pendientes (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT, metodo TEXT, json TEXT, tipo TEXT)");
     }
 
@@ -45,6 +46,13 @@ public class DBHelper extends SQLiteOpenHelper {
         }
         if (oldVersion < 14) {
             try { db.execSQL("ALTER TABLE medicamentos ADD COLUMN is_deleted INTEGER DEFAULT 0"); } catch (Exception e) {}
+        }
+        if (oldVersion < 15) {
+            try { db.execSQL("ALTER TABLE farmacias ADD COLUMN chat_habilitado INTEGER DEFAULT 0"); } catch (Exception e) {}
+            try { db.execSQL("CREATE TABLE mensajes (id TEXT PRIMARY KEY, rev TEXT, emisor TEXT, receptor TEXT, mensaje TEXT, fecha TEXT, id_farmacia TEXT, id_usuario TEXT, leido INTEGER DEFAULT 0, emisor_nombre TEXT, cliente_nombre_completo TEXT)"); } catch (Exception e) {}
+        }
+        if (oldVersion < 16) {
+            try { db.execSQL("ALTER TABLE mensajes ADD COLUMN cliente_nombre_completo TEXT"); } catch (Exception e) {}
         }
     }
 
@@ -96,6 +104,7 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("correo", farm.optString("correo", ""));
             cv.put("foto", farm.optString("foto", ""));
             cv.put("descripcion", farm.optString("descripcion", ""));
+            cv.put("chat_habilitado", farm.optBoolean("chat_habilitado", false) ? 1 : 0);
             db.insertWithOnConflict("farmacias", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         } catch (Exception e) {}
     }
@@ -116,6 +125,7 @@ public class DBHelper extends SQLiteOpenHelper {
                     obj.put("correo", c.getString(c.getColumnIndexOrThrow("correo")));
                     obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
                     obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
+                    obj.put("chat_habilitado", c.getInt(c.getColumnIndexOrThrow("chat_habilitado")) == 1);
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (c.moveToNext());
@@ -406,6 +416,7 @@ public class DBHelper extends SQLiteOpenHelper {
                 obj.put("clave", c.getString(c.getColumnIndexOrThrow("clave")));
                 obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
                 obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
+                obj.put("chat_habilitado", c.getInt(c.getColumnIndexOrThrow("chat_habilitado")) == 1);
                 c.close();
                 return obj;
             } catch (Exception e) {}
@@ -417,15 +428,85 @@ public class DBHelper extends SQLiteOpenHelper {
     public void administrarFarmacias(String accion, String[] datos) {
         SQLiteDatabase db = getWritableDatabase();
         if (accion.equals("nuevo")) {
-            db.execSQL("INSERT OR REPLACE INTO farmacias(id, rev, empresa, direccion, telefono, correo, clave, foto, descripcion) VALUES(?,?,?,?,?,?,?,?,?)", datos);
+            db.execSQL("INSERT OR REPLACE INTO farmacias(id, rev, empresa, direccion, telefono, correo, clave, foto, descripcion, chat_habilitado) VALUES(?,?,?,?,?,?,?,?,?,?)", datos);
         } else if (accion.equals("modificar")) {
-            db.execSQL("UPDATE farmacias SET rev=?, empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=? WHERE id=?", 
-                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[0]});
+            db.execSQL("UPDATE farmacias SET rev=?, empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=?, chat_habilitado=? WHERE id=?", 
+                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[0]});
         }
     }
 
     public Cursor login(String correo, String clave) {
         return getReadableDatabase().rawQuery("SELECT * FROM usuarios WHERE correo=? AND clave=?", new String[]{correo, clave});
+    }
+
+    public void guardarMensajeLocal(JSONObject m) {
+        try {
+            SQLiteDatabase db = getWritableDatabase();
+            ContentValues cv = new ContentValues();
+            cv.put("id", m.getString("_id"));
+            cv.put("rev", m.optString("_rev", ""));
+            cv.put("emisor", m.getString("emisor"));
+            cv.put("receptor", m.getString("receptor"));
+            cv.put("mensaje", m.getString("mensaje"));
+            cv.put("fecha", m.getString("fecha"));
+            cv.put("id_farmacia", m.getString("id_farmacia"));
+            cv.put("id_usuario", m.getString("id_usuario"));
+            cv.put("leido", m.optInt("leido", 0));
+            cv.put("emisor_nombre", m.optString("emisor_nombre", "Desconocido"));
+            cv.put("cliente_nombre_completo", m.optString("cliente_nombre_completo", "Cliente"));
+            db.insertWithOnConflict("mensajes", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+        } catch (Exception e) {
+            Log.e("DBHelper", "Error guardando mensaje", e);
+        }
+    }
+
+    public List<JSONObject> obtenerMensajesChat(String farmaciaId, String usuarioId) {
+        List<JSONObject> lista = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT * FROM mensajes WHERE id_farmacia=? AND id_usuario=? ORDER BY fecha ASC", new String[]{farmaciaId, usuarioId});
+        if (c.moveToFirst()) {
+            do {
+                try {
+                    JSONObject obj = new JSONObject();
+                    obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                    obj.put("emisor", c.getString(c.getColumnIndexOrThrow("emisor")));
+                    obj.put("receptor", c.getString(c.getColumnIndexOrThrow("receptor")));
+                    obj.put("mensaje", c.getString(c.getColumnIndexOrThrow("mensaje")));
+                    obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
+                    obj.put("id_farmacia", c.getString(c.getColumnIndexOrThrow("id_farmacia")));
+                    obj.put("id_usuario", c.getString(c.getColumnIndexOrThrow("id_usuario")));
+                    obj.put("leido", c.getInt(c.getColumnIndexOrThrow("leido")));
+                    obj.put("emisor_nombre", c.getString(c.getColumnIndexOrThrow("emisor_nombre")));
+                    lista.add(obj);
+                } catch (Exception e) {}
+            } while (c.moveToNext());
+        }
+        c.close();
+        return lista;
+    }
+
+    public List<JSONObject> obtenerConversacionesFarmacia(String farmaciaId) {
+        List<JSONObject> lista = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        // Agrupamos por id_usuario para tener una fila por chat, mostrando el último mensaje
+        String sql = "SELECT m.* FROM mensajes m INNER JOIN (SELECT id_usuario, MAX(fecha) as max_fecha FROM mensajes WHERE id_farmacia=? GROUP BY id_usuario) t " +
+                     "ON m.id_usuario = t.id_usuario AND m.fecha = t.max_fecha WHERE m.id_farmacia=? ORDER BY m.fecha DESC";
+        Cursor c = db.rawQuery(sql, new String[]{farmaciaId, farmaciaId});
+        if (c.moveToFirst()) {
+            do {
+                try {
+                    JSONObject obj = new JSONObject();
+                    obj.put("id_usuario", c.getString(c.getColumnIndexOrThrow("id_usuario")));
+                    obj.put("ultimo_mensaje", c.getString(c.getColumnIndexOrThrow("mensaje")));
+                    obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
+                    // Ahora usamos el campo específico que guarda siempre el nombre del cliente
+                    obj.put("nombre_cliente", c.getString(c.getColumnIndexOrThrow("cliente_nombre_completo")));
+                    lista.add(obj);
+                } catch (Exception e) {}
+            } while (c.moveToNext());
+        }
+        c.close();
+        return lista;
     }
 
     public Cursor loginFarmacia(String correo, String clave) {

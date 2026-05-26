@@ -43,6 +43,14 @@ public class FarmaciasActivity extends AppCompatActivity {
                     query.put("empresa", new JSONObject().put("$exists", true));
                     selector.put("selector", query);
                     
+                    // Optimización: Solo traer campos necesarios
+                    JSONArray fields = new JSONArray();
+                    fields.put("_id"); fields.put("_rev"); fields.put("empresa");
+                    fields.put("direccion"); fields.put("telefono"); fields.put("correo");
+                    fields.put("foto"); fields.put("descripcion"); fields.put("chat_habilitado");
+                    selector.put("fields", fields);
+                    selector.put("limit", 100);
+                    
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
                     Log.d("FarmaciasAct", "Respuesta servidor: " + res);

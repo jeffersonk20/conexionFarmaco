@@ -55,6 +55,16 @@
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Breve Presentación / Descripción" android:textStyle="bold" android:textColor="@color/azul_primario" />
         <EditText android:id="@+id/etAdminDescripcion" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:hint="Lo que verán tus clientes..." android:minLines="3" android:gravity="top" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
 
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/swAdminChatHabilitado"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Habilitar Chat Directo con Clientes"
+            android:textColor="@color/azul_primario"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"
+            android:checked="true" />
+
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Contraseña" android:textStyle="bold" android:textColor="@color/azul_primario" />
         <EditText android:id="@+id/etAdminPass" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/modern_edittext" android:inputType="textPassword" android:textColor="#000000" android:textColorHint="#757575" android:layout_marginBottom="16dp" android:padding="15dp"/>
 

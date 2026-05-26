@@ -134,10 +134,42 @@ public class HomeActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Sincronizar farmacias primero para que los medicamentos se puedan mostrar (por la restricción de id_farmacia en DBHelper)
+        sincronizarFarmacias();
         // Refrescar promociones por si el admin hizo cambios offline
         cargarPromociones();
         // Intentar sincronizar lo pendiente
         Utilidades.sincronizar(this);
+    }
+
+    private void sincronizarFarmacias() {
+        new Thread(() -> {
+            try {
+                if (Utilidades.hayInternet(this)) {
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("empresa", new JSONObject().put("$exists", true)));
+                    // Optimización: Solo traer campos necesarios para que sea rápido
+                    JSONArray fields = new JSONArray();
+                    fields.put("_id"); fields.put("_rev"); fields.put("empresa");
+                    fields.put("direccion"); fields.put("telefono"); fields.put("correo");
+                    fields.put("foto"); fields.put("descripcion"); fields.put("chat_habilitado");
+                    selector.put("fields", fields);
+                    selector.put("limit", 50);
+
+                    String res = new TareaServidor().execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < docs.length(); i++) {
+                            db.guardarFarmaciaCache(docs.getJSONObject(i));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("HomeAct", "Error sincronizando farmacias", e);
+            }
+        }).start();
     }
 
     private void cargarDatosUsuario() {
@@ -186,6 +218,16 @@ public class HomeActivity extends AppCompatActivity {
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
                     selector.put("selector", new JSONObject().put("promocion", true));
+                    // Optimización: Solo traer campos necesarios para el Home
+                    JSONArray fields = new JSONArray();
+                    fields.put("_id"); fields.put("_rev"); fields.put("id_farmacia");
+                    fields.put("nombre"); fields.put("precio"); fields.put("stock");
+                    fields.put("presentacion"); fields.put("promocion");
+                    fields.put("foto1"); fields.put("foto2"); fields.put("foto3");
+                    fields.put("nombre_farmacia"); fields.put("enfermedad_objetivo");
+                    selector.put("fields", fields);
+                    selector.put("limit", 20); // No traer cientos de productos de golpe
+
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);
@@ -249,6 +291,16 @@ public class HomeActivity extends AppCompatActivity {
                     orOrArray(orArray, "enfermedad_objetivo", regexQuery);
                     
                     selector.put("selector", new JSONObject().put("$or", orArray));
+                    // Optimización: Solo traer campos necesarios para la búsqueda
+                    JSONArray fields = new JSONArray();
+                    fields.put("_id"); fields.put("_rev"); fields.put("id_farmacia");
+                    fields.put("nombre"); fields.put("precio"); fields.put("stock");
+                    fields.put("presentacion"); fields.put("promocion");
+                    fields.put("foto1"); fields.put("foto2"); fields.put("foto3");
+                    fields.put("nombre_farmacia"); fields.put("enfermedad_objetivo");
+                    selector.put("fields", fields);
+                    selector.put("limit", 50);
+
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);

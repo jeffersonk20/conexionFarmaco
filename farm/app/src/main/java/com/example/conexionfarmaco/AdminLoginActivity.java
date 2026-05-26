@@ -54,6 +54,7 @@ public class AdminLoginActivity extends AppCompatActivity {
                 farmDoc.put("clave", cursor.getString(cursor.getColumnIndexOrThrow("clave")));
                 farmDoc.put("foto", cursor.getString(cursor.getColumnIndexOrThrow("foto")));
                 farmDoc.put("descripcion", cursor.getString(cursor.getColumnIndexOrThrow("descripcion")));
+                farmDoc.put("chat_habilitado", cursor.getInt(cursor.getColumnIndexOrThrow("chat_habilitado")) == 1);
                 cursor.close();
                 Log.d("AdminLogin", "Login local exitoso para: " + cor);
                 entrar(farmDoc, false);
@@ -110,6 +111,7 @@ public class AdminLoginActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
         editor.putString("farmaciaId", id);
         editor.putString("farmaciaNombre", nombre);
+        editor.putBoolean("chatHabilitado", farmDoc.optBoolean("chat_habilitado", false));
         editor.apply();
 
         if (guardarEnLocal) {
@@ -123,7 +125,8 @@ public class AdminLoginActivity extends AppCompatActivity {
                     farmDoc.optString("correo", ""),
                     farmDoc.optString("clave", ""),
                     farmDoc.optString("foto", ""),
-                    farmDoc.optString("descripcion", "")
+                    farmDoc.optString("descripcion", ""),
+                    farmDoc.optBoolean("chat_habilitado", false) ? "1" : "0"
             });
         }
 

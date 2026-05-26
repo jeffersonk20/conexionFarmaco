@@ -8,9 +8,17 @@ import android.widget.EditText;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.webkit.WebResourceRequest;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.view.View;
+import android.util.Log;
+
 public class PagoActivity extends AppCompatActivity {
 
     private EditText etNumero, etVenc, etCVV, etNombre;
+    private WebView webView;
+    private View scrollForm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,8 +29,16 @@ public class PagoActivity extends AppCompatActivity {
         etVenc = findViewById(R.id.etFechaVenc);
         etCVV = findViewById(R.id.etCVV);
         etNombre = findViewById(R.id.etNombreTarjeta);
+        webView = findViewById(R.id.wvWompi);
+        scrollForm = findViewById(R.id.scrollFormularioPago);
 
         findViewById(R.id.btnPagoAtras).setOnClickListener(v -> finish());
+
+        // Verificamos si venimos de ResumenPedido con una URL de Wompi
+        String urlPago = getIntent().getStringExtra("urlPago");
+        if (urlPago != null && !urlPago.isEmpty()) {
+            mostrarWebView(urlPago);
+        }
 
         findViewById(R.id.btnEscanearTarjeta).setOnClickListener(v -> simularEscaneo());
 
@@ -36,6 +52,36 @@ public class PagoActivity extends AppCompatActivity {
             intent.putExtra("metodo_pago", "tarjeta");
             startActivity(intent);
         });
+    }
+
+    private void mostrarWebView(String url) {
+        scrollForm.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                Log.d("Wompi", "Cargando URL: " + url);
+
+                // Detectamos cuando Wompi intenta redirigir al dominio "pago-finalizado.com"
+                if (url.contains("pago-finalizado.com")) {
+                    // El pago terminó. Regresamos a ResumenPedidoActivity con el resultado
+                    Intent intent = new Intent(PagoActivity.this, ResumenPedidoActivity.class);
+                    intent.setData(android.net.Uri.parse(url));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    startActivity(intent);
+                    finish();
+                    return true;
+                }
+                return false;
+            }
+        });
+        
+        webView.loadUrl(url);
     }
 
     private void simularEscaneo() {
