@@ -99,12 +99,7 @@ public class DBHelper extends SQLiteOpenHelper {
     public void guardarFarmaciaCache(JSONObject farm, boolean forzar) {
         try {
             String id = farm.getString("_id");
-            
-            // ESCUDO: No sobreescribir si hay cambios locales pendientes, a menos que sea forzado (ej: desde SyncWorker)
-            if (!forzar && estaPendienteSincronizacion(id)) {
-                return;
-            }
-
+            if (!forzar && estaPendienteSincronizacion(id)) return;
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put("id", id);
@@ -123,9 +118,7 @@ public class DBHelper extends SQLiteOpenHelper {
     public List<JSONObject> obtenerFarmaciasCache() {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-        // Filtro robusto: Elimina espacios y compara en minúsculas para atrapar "La Value"
-        String sql = "SELECT * FROM farmacias WHERE LOWER(REPLACE(empresa, ' ', '')) != 'lavalue'";
-        Cursor c = db.rawQuery(sql, null);
+        Cursor c = db.rawQuery("SELECT * FROM farmacias", null);
         if (c.moveToFirst()) {
             do {
                 try {
@@ -147,6 +140,34 @@ public class DBHelper extends SQLiteOpenHelper {
         return lista;
     }
 
+    public void purgarFarmaciasHuerfanas(java.util.Set<String> idsServidor) {
+        try {
+            SQLiteDatabase dbR = getReadableDatabase();
+            Cursor c = dbR.rawQuery("SELECT id FROM farmacias", null);
+            List<String> idsABorrar = new ArrayList<>();
+            if (c.moveToFirst()) {
+                do {
+                    String idL = c.getString(0);
+                    if (!idsServidor.contains(idL) && !estaPendienteSincronizacion(idL)) idsABorrar.add(idL);
+                } while (c.moveToNext());
+            }
+            c.close();
+            for (String id : idsABorrar) eliminarFarmaciaDefinitiva(id);
+        } catch (Exception e) {}
+    }
+
+    public void limpiarFantasmasLaValue() {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            db.execSQL("DELETE FROM farmacias WHERE LOWER(REPLACE(empresa, ' ', '')) = 'lavalue'");
+        } catch (Exception e) {}
+    }
+
+    public void eliminarFarmaciaDefinitiva(String id) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete("farmacias", "id = ?", new String[]{id});
+    }
+
     public void guardarMedicamentoCache(JSONObject med) {
         guardarMedicamentoCache(med, false);
     }
@@ -154,12 +175,7 @@ public class DBHelper extends SQLiteOpenHelper {
     public void guardarMedicamentoCache(JSONObject med, boolean forzar) {
         try {
             String id = med.getString("_id");
-            
-            // ESCUDO: No guardar si está pendiente de sincronizar O si está marcado como borrado localmente
-            if (!forzar && (estaPendienteSincronizacion(id) || estaMarcadoComoBorrado(id))) {
-                return;
-            }
-
+            if (!forzar && (estaPendienteSincronizacion(id) || estaMarcadoComoBorrado(id))) return;
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put("id", id);
@@ -177,12 +193,10 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("enfermedad_objetivo", med.optString("enfermedad_objetivo", "Ninguna"));
             cv.put("is_deleted", 0);
             db.insertWithOnConflict("medicamentos", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
-        } catch (Exception e) {
-            Log.e("DBHelper", "Error guardando medicamento cache", e);
-        }
+        } catch (Exception e) { Log.e("DBHelper", "Error med cache", e); }
     }
 
-    private boolean estaPendienteSincronizacion(String id) {
+    public boolean estaPendienteSincronizacion(String id) {
         SQLiteDatabase db = getReadableDatabase();
         Cursor c = db.rawQuery("SELECT id FROM pendientes WHERE url LIKE ?", new String[]{"%" + id + "%"});
         boolean pendiente = c.getCount() > 0;
@@ -198,43 +212,18 @@ public class DBHelper extends SQLiteOpenHelper {
         return borrado;
     }
 
-    public void guardarMedicamentoLocal(JSONObject med) {
-        guardarMedicamentoCache(med);
-    }
+    public void guardarMedicamentoLocal(JSONObject med) { guardarMedicamentoCache(med); }
 
     public void eliminarMedicamentoLocal(String id) {
         SQLiteDatabase db = this.getWritableDatabase();
-        // En lugar de borrar, marcamos como eliminado (Tombstone)
         ContentValues cv = new ContentValues();
         cv.put("is_deleted", 1);
         db.update("medicamentos", cv, "id = ?", new String[]{id});
     }
 
-    public void limpiarFantasmasLaValue() {
-        try {
-            SQLiteDatabase db = this.getWritableDatabase();
-            // Borrado físico de cualquier variante de "La Value"
-            db.execSQL("DELETE FROM farmacias WHERE LOWER(REPLACE(empresa, ' ', '')) = 'lavalue'");
-        } catch (Exception e) {}
-    }
-
-    public void eliminarFarmaciaDefinitiva(String id) {
+    public void eliminarMedicamentoDefinitivo(String id) {
         SQLiteDatabase db = this.getWritableDatabase();
-        db.delete("farmacias", "id = ?", new String[]{id});
-    }
-
-    public void purgarFarmaciasHuerfanas(java.util.Set<String> idsServidor) {
-        try {
-            List<JSONObject> locales = obtenerFarmaciasCache();
-            for (JSONObject f : locales) {
-                String idL = f.getString("_id");
-                // Si no está en el servidor Y no es un registro nuevo pendiente de subir, se borra
-                if (!idsServidor.contains(idL) && !estaPendienteSincronizacion(idL)) {
-                    eliminarFarmaciaDefinitiva(idL);
-                    Log.d("DBHelper", "Farmacia fantasma eliminada: " + idL);
-                }
-            }
-        } catch (Exception e) {}
+        db.delete("medicamentos", "id = ?", new String[]{id});
     }
 
     public void limpiarMedicamentosFarmacia(String farmaciaId) {
@@ -248,8 +237,7 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void limpiarMedicamentosPromocion() {
-        SQLiteDatabase db = this.getWritableDatabase();
-        db.delete("medicamentos", "promocion = 1 AND is_deleted = 0", null);
+        getWritableDatabase().delete("medicamentos", "promocion = 1 AND is_deleted = 0", null);
     }
 
     public void limpiarDatosHuerfanos() {
@@ -263,25 +251,15 @@ public class DBHelper extends SQLiteOpenHelper {
     public List<JSONObject> obtenerMedicamentosCache(String query, boolean soloPromos) {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-        
-        // FILTRO: is_deleted = 0
         String sql = "SELECT m.* FROM medicamentos m WHERE m.is_deleted = 0 AND m.id_farmacia IN (SELECT id FROM farmacias)";
-        
         List<String> selectionArgs = new ArrayList<>();
-        StringBuilder whereClause = new StringBuilder();
-
         if (soloPromos) {
-            whereClause.append(" AND m.promocion = 1");
+            sql += " AND m.promocion = 1";
         } else if (query != null && !query.isEmpty()) {
-            String cleanQuery = query.toLowerCase().replaceAll("[.,]", "").trim();
-            String normalizedQuery = cleanQuery.replaceAll("[áàä]", "a").replaceAll("[éèë]", "e").replaceAll("[íìï]", "i").replaceAll("[óòö]", "o").replaceAll("[úùü]", "u");
-            String param = "%" + normalizedQuery + "%";
-            String sqlNormalizer = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(%s), 'á','a'), 'é','e'), 'í','i'), 'ó','o'), 'ú','u'), 'ü','u')";
-            whereClause.append(" AND (" + String.format(sqlNormalizer, "m.enfermedad_objetivo") + " LIKE ? OR " + String.format(sqlNormalizer, "m.nombre") + " LIKE ? OR " + String.format(sqlNormalizer, "m.presentacion") + " LIKE ?)");
+            String param = "%" + query.toLowerCase() + "%";
+            sql += " AND (LOWER(m.nombre) LIKE ? OR LOWER(m.enfermedad_objetivo) LIKE ? OR LOWER(m.presentacion) LIKE ?)";
             selectionArgs.add(param); selectionArgs.add(param); selectionArgs.add(param);
         }
-        sql += whereClause.toString();
-
         Cursor cursor = db.rawQuery(sql, selectionArgs.toArray(new String[0]));
         if (cursor.moveToFirst()) {
             do {
@@ -335,44 +313,12 @@ public class DBHelper extends SQLiteOpenHelper {
         } catch (Exception e) {}
     }
 
-    public void actualizarRevEnPendientes(String id, String nuevoRev) {
-        try {
-            SQLiteDatabase db = this.getWritableDatabase();
-            Cursor c = db.rawQuery("SELECT id, url, json FROM pendientes WHERE url LIKE ?", new String[]{"%" + id + "%"});
-            if (c.moveToFirst()) {
-                do {
-                    int pId = c.getInt(0);
-                    String pUrl = c.getString(1);
-                    String pJson = c.getString(2);
-                    if (pUrl.contains("?rev=")) pUrl = pUrl.substring(0, pUrl.indexOf("?rev=")) + "?rev=" + nuevoRev;
-                    else if (pUrl.contains("&rev=")) pUrl = pUrl.replaceAll("rev=[^&]+", "rev=" + nuevoRev);
-                    try {
-                        if (pJson != null && pJson.startsWith("{")) {
-                            JSONObject jobj = new JSONObject(pJson);
-                            if (jobj.has("_rev")) { jobj.put("_rev", nuevoRev); pJson = jobj.toString(); }
-                        }
-                    } catch (Exception e) {}
-                    ContentValues cv = new ContentValues();
-                    cv.put("url", pUrl); cv.put("json", pJson);
-                    db.update("pendientes", cv, "id = ?", new String[]{String.valueOf(pId)});
-                } while (c.moveToNext());
-            }
-            c.close();
-        } catch (Exception e) {}
-    }
-
     public void limpiarPedidosUsuario(String correo) {
-        try {
-            SQLiteDatabase db = this.getWritableDatabase();
-            db.delete("pedidos", "cliente_correo = ?", new String[]{correo});
-        } catch (Exception e) {}
+        getWritableDatabase().delete("pedidos", "cliente_correo = ?", new String[]{correo});
     }
 
     public void limpiarPedidosFarmacia(String farmaciaId) {
-        try {
-            SQLiteDatabase db = this.getWritableDatabase();
-            db.delete("pedidos", "farmacias_ids LIKE ?", new String[]{"%\"" + farmaciaId + "\"%"});
-        } catch (Exception e) {}
+        getWritableDatabase().delete("pedidos", "farmacias_ids LIKE ?", new String[]{"%\"" + farmaciaId + "\"%"});
     }
 
     public List<JSONObject> obtenerPedidosCache(String correo) {
@@ -440,41 +386,6 @@ public class DBHelper extends SQLiteOpenHelper {
         }
     }
 
-    public JSONObject obtenerFarmaciaLocal(String id) {
-        SQLiteDatabase db = getReadableDatabase();
-        Cursor c = db.rawQuery("SELECT * FROM farmacias WHERE id=?", new String[]{id});
-        if (c.moveToFirst()) {
-            try {
-                JSONObject obj = new JSONObject();
-                obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
-                obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
-                obj.put("empresa", c.getString(c.getColumnIndexOrThrow("empresa")));
-                obj.put("direccion", c.getString(c.getColumnIndexOrThrow("direccion")));
-                obj.put("telefono", c.getString(c.getColumnIndexOrThrow("telefono")));
-                obj.put("correo", c.getString(c.getColumnIndexOrThrow("correo")));
-                obj.put("clave", c.getString(c.getColumnIndexOrThrow("clave")));
-                obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
-                obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
-                obj.put("chat_habilitado", c.getInt(c.getColumnIndexOrThrow("chat_habilitado")) == 1);
-                obj.put("tipo", "farmacia");
-                c.close();
-                return obj;
-            } catch (Exception e) {}
-        }
-        c.close();
-        return null;
-    }
-
-    public void administrarFarmacias(String accion, String[] datos) {
-        SQLiteDatabase db = getWritableDatabase();
-        if (accion.equals("nuevo")) {
-            db.execSQL("INSERT OR REPLACE INTO farmacias(id, rev, empresa, direccion, telefono, correo, clave, foto, descripcion, chat_habilitado) VALUES(?,?,?,?,?,?,?,?,?,?)", datos);
-        } else if (accion.equals("modificar")) {
-            db.execSQL("UPDATE farmacias SET rev=?, empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=?, chat_habilitado=? WHERE id=?", 
-                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[0]});
-        }
-    }
-
     public Cursor login(String correo, String clave) {
         return getReadableDatabase().rawQuery("SELECT * FROM usuarios WHERE correo=? AND clave=?", new String[]{correo, clave});
     }
@@ -484,17 +395,9 @@ public class DBHelper extends SQLiteOpenHelper {
             SQLiteDatabase db = getWritableDatabase();
             String id = m.getString("_id");
             int leido = m.optInt("leido", 0);
-
-            // ESCUDO: Si el servidor dice que no está leído (0), pero localmente ya lo marcamos como leído (1),
-            // mantenemos el estado local para evitar que la "burbuja" reaparezca por retraso del servidor.
-            if (leido == 0) {
-                Cursor c = db.rawQuery("SELECT leido FROM mensajes WHERE id=?", new String[]{id});
-                if (c.moveToFirst()) {
-                    if (c.getInt(0) == 1) leido = 1;
-                }
-                c.close();
-            }
-
+            Cursor c = db.rawQuery("SELECT leido FROM mensajes WHERE id=?", new String[]{id});
+            if (c.moveToFirst() && c.getInt(0) == 1) leido = 1;
+            c.close();
             ContentValues cv = new ContentValues();
             cv.put("id", id);
             cv.put("rev", m.optString("_rev", ""));
@@ -508,9 +411,7 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("emisor_nombre", m.optString("emisor_nombre", "Desconocido"));
             cv.put("cliente_nombre_completo", m.optString("cliente_nombre_completo", "Cliente"));
             db.insertWithOnConflict("mensajes", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
-        } catch (Exception e) {
-            Log.e("DBHelper", "Error guardando mensaje", e);
-        }
+        } catch (Exception e) {}
     }
 
     public List<JSONObject> obtenerMensajesChat(String farmaciaId, String usuarioId) {
@@ -541,13 +442,9 @@ public class DBHelper extends SQLiteOpenHelper {
     public List<JSONObject> obtenerConversacionesFarmacia(String farmaciaId) {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-        
-        // Agrupamos por id_usuario para tener una fila por chat, mostrando el último mensaje
-        // Además contamos cuántos mensajes NO leídos hay para ese usuario y farmacia
         String sql = "SELECT m.*, (SELECT COUNT(*) FROM mensajes WHERE id_farmacia=m.id_farmacia AND id_usuario=m.id_usuario AND leido=0 AND emisor != m.id_farmacia) as no_leidos " +
                      "FROM mensajes m INNER JOIN (SELECT id_usuario, MAX(fecha) as max_fecha FROM mensajes WHERE id_farmacia=? GROUP BY id_usuario) t " +
                      "ON m.id_usuario = t.id_usuario AND m.fecha = t.max_fecha WHERE m.id_farmacia=? ORDER BY m.fecha DESC";
-        
         Cursor c = db.rawQuery(sql, new String[]{farmaciaId, farmaciaId});
         if (c.moveToFirst()) {
             do {
@@ -569,9 +466,8 @@ public class DBHelper extends SQLiteOpenHelper {
     public void marcarComoLeido(String farmaciaId, String usuarioId, String idPropio) {
         try {
             SQLiteDatabase db = getWritableDatabase();
-            android.content.ContentValues cv = new android.content.ContentValues();
+            ContentValues cv = new ContentValues();
             cv.put("leido", 1);
-            // Marcamos como leído todo lo que NO hayamos enviado nosotros (el emisor no es idPropio)
             db.update("mensajes", cv, "id_farmacia=? AND id_usuario=? AND emisor != ?", new String[]{farmaciaId, usuarioId, idPropio});
         } catch (Exception e) {}
     }
@@ -579,17 +475,72 @@ public class DBHelper extends SQLiteOpenHelper {
     public int contarNoLeidosCliente(String farmaciaId, String usuarioId) {
         int count = 0;
         try {
-            SQLiteDatabase db = getReadableDatabase();
-            // Para el cliente, los mensajes no leídos son los que envió la farmacia (emisor == farmaciaId)
-            Cursor c = db.rawQuery("SELECT COUNT(*) FROM mensajes WHERE id_farmacia=? AND id_usuario=? AND leido=0 AND emisor=?", 
-                    new String[]{farmaciaId, usuarioId, farmaciaId});
+            Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM mensajes WHERE id_farmacia=? AND id_usuario=? AND leido=0 AND emisor=?", new String[]{farmaciaId, usuarioId, farmaciaId});
             if (c.moveToFirst()) count = c.getInt(0);
             c.close();
         } catch (Exception e) {}
         return count;
     }
 
+    public void administrarFarmacias(String accion, String[] datos) {
+        SQLiteDatabase db = getWritableDatabase();
+        if (accion.equals("nuevo")) {
+            db.execSQL("INSERT OR REPLACE INTO farmacias(id, rev, empresa, direccion, telefono, correo, clave, foto, descripcion, chat_habilitado) VALUES(?,?,?,?,?,?,?,?,?,?)", datos);
+        } else if (accion.equals("modificar")) {
+            db.execSQL("UPDATE farmacias SET rev=?, empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=?, chat_habilitado=? WHERE id=?", 
+                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[0]});
+        }
+    }
+
+    public JSONObject obtenerFarmaciaLocal(String id) {
+        Cursor c = getReadableDatabase().rawQuery("SELECT * FROM farmacias WHERE id=?", new String[]{id});
+        if (c.moveToFirst()) {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                obj.put("empresa", c.getString(c.getColumnIndexOrThrow("empresa")));
+                obj.put("direccion", c.getString(c.getColumnIndexOrThrow("direccion")));
+                obj.put("telefono", c.getString(c.getColumnIndexOrThrow("telefono")));
+                obj.put("correo", c.getString(c.getColumnIndexOrThrow("correo")));
+                obj.put("clave", c.getString(c.getColumnIndexOrThrow("clave")));
+                obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
+                obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
+                obj.put("chat_habilitado", c.getInt(c.getColumnIndexOrThrow("chat_habilitado")) == 1);
+                obj.put("tipo", "farmacia");
+                c.close(); return obj;
+            } catch (Exception e) {}
+        }
+        c.close(); return null;
+    }
+
     public Cursor loginFarmacia(String correo, String clave) {
         return getReadableDatabase().rawQuery("SELECT * FROM farmacias WHERE LOWER(correo)=LOWER(?) AND clave=?", new String[]{correo, clave});
+    }
+
+    public void actualizarRevEnPendientes(String id, String nuevoRev) {
+        try {
+            SQLiteDatabase db = getWritableDatabase();
+            Cursor c = db.rawQuery("SELECT id, url, json FROM pendientes WHERE url LIKE ?", new String[]{"%" + id + "%"});
+            if (c.moveToFirst()) {
+                do {
+                    int pId = c.getInt(0);
+                    String pUrl = c.getString(1);
+                    String pJson = c.getString(2);
+                    if (pUrl.contains("?rev=")) pUrl = pUrl.substring(0, pUrl.indexOf("?rev=")) + "?rev=" + nuevoRev;
+                    else if (pUrl.contains("&rev=")) pUrl = pUrl.replaceAll("rev=[^&]+", "rev=" + nuevoRev);
+                    try {
+                        if (pJson != null && pJson.startsWith("{")) {
+                            JSONObject jobj = new JSONObject(pJson);
+                            if (jobj.has("_rev")) { jobj.put("_rev", nuevoRev); pJson = jobj.toString(); }
+                        }
+                    } catch (Exception e) {}
+                    ContentValues cv = new ContentValues();
+                    cv.put("url", pUrl); cv.put("json", pJson);
+                    db.update("pendientes", cv, "id = ?", new String[]{String.valueOf(pId)});
+                } while (c.moveToNext());
+            }
+            c.close();
+        } catch (Exception e) {}
     }
 }
