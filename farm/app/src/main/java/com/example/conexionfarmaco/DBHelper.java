@@ -123,7 +123,9 @@ public class DBHelper extends SQLiteOpenHelper {
     public List<JSONObject> obtenerFarmaciasCache() {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-        Cursor c = db.rawQuery("SELECT * FROM farmacias", null);
+        // Filtro robusto: Elimina espacios y compara en minúsculas para atrapar "La Value"
+        String sql = "SELECT * FROM farmacias WHERE LOWER(REPLACE(empresa, ' ', '')) != 'lavalue'";
+        Cursor c = db.rawQuery(sql, null);
         if (c.moveToFirst()) {
             do {
                 try {
@@ -208,9 +210,31 @@ public class DBHelper extends SQLiteOpenHelper {
         db.update("medicamentos", cv, "id = ?", new String[]{id});
     }
 
-    public void eliminarMedicamentoDefinitivo(String id) {
+    public void limpiarFantasmasLaValue() {
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            // Borrado físico de cualquier variante de "La Value"
+            db.execSQL("DELETE FROM farmacias WHERE LOWER(REPLACE(empresa, ' ', '')) = 'lavalue'");
+        } catch (Exception e) {}
+    }
+
+    public void eliminarFarmaciaDefinitiva(String id) {
         SQLiteDatabase db = this.getWritableDatabase();
-        db.delete("medicamentos", "id = ?", new String[]{id});
+        db.delete("farmacias", "id = ?", new String[]{id});
+    }
+
+    public void purgarFarmaciasHuerfanas(java.util.Set<String> idsServidor) {
+        try {
+            List<JSONObject> locales = obtenerFarmaciasCache();
+            for (JSONObject f : locales) {
+                String idL = f.getString("_id");
+                // Si no está en el servidor Y no es un registro nuevo pendiente de subir, se borra
+                if (!idsServidor.contains(idL) && !estaPendienteSincronizacion(idL)) {
+                    eliminarFarmaciaDefinitiva(idL);
+                    Log.d("DBHelper", "Farmacia fantasma eliminada: " + idL);
+                }
+            }
+        } catch (Exception e) {}
     }
 
     public void limpiarMedicamentosFarmacia(String farmaciaId) {
@@ -550,6 +574,19 @@ public class DBHelper extends SQLiteOpenHelper {
             // Marcamos como leído todo lo que NO hayamos enviado nosotros (el emisor no es idPropio)
             db.update("mensajes", cv, "id_farmacia=? AND id_usuario=? AND emisor != ?", new String[]{farmaciaId, usuarioId, idPropio});
         } catch (Exception e) {}
+    }
+
+    public int contarNoLeidosCliente(String farmaciaId, String usuarioId) {
+        int count = 0;
+        try {
+            SQLiteDatabase db = getReadableDatabase();
+            // Para el cliente, los mensajes no leídos son los que envió la farmacia (emisor == farmaciaId)
+            Cursor c = db.rawQuery("SELECT COUNT(*) FROM mensajes WHERE id_farmacia=? AND id_usuario=? AND leido=0 AND emisor=?", 
+                    new String[]{farmaciaId, usuarioId, farmaciaId});
+            if (c.moveToFirst()) count = c.getInt(0);
+            c.close();
+        } catch (Exception e) {}
+        return count;
     }
 
     public Cursor loginFarmacia(String correo, String clave) {

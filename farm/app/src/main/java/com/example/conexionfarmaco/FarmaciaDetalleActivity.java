@@ -16,9 +16,10 @@ import org.json.JSONObject;
 
 public class FarmaciaDetalleActivity extends AppCompatActivity {
 
-    private TextView tvNombre, tvDesc;
+    private TextView tvNombre, tvDesc, tvBadge;
     private LinearLayout containerMed;
-    private String farmaciaId;
+    private String farmaciaId, usuarioId;
+    private View layoutFabChat;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,9 +28,17 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
 
         tvNombre = findViewById(R.id.tvDetalleNombreFarmacia);
         tvDesc = findViewById(R.id.tvDetalleDescFarmacia);
+        tvBadge = findViewById(R.id.tvChatBadgeDetalle);
         containerMed = findViewById(R.id.containerMedicamentosFarmacia);
+        layoutFabChat = findViewById(R.id.layoutFabChat);
 
         findViewById(R.id.toolbarDetalle).setOnClickListener(v -> finish());
+
+        // Obtener ID de usuario para el contador de mensajes
+        try {
+            JSONObject userData = new JSONObject(getSharedPreferences("UserPrefs", MODE_PRIVATE).getString("userData", "{}"));
+            usuarioId = userData.optString("_id", "");
+        } catch (Exception e) {}
 
         String data = getIntent().getStringExtra("farmaciaData");
         if (data != null) {
@@ -48,19 +57,69 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
                 }
 
                 // Lógica del Chat Directo
-                FloatingActionButton fabChat = findViewById(R.id.fabChat);
                 if (farmacia.optBoolean("chat_habilitado", false)) {
-                    fabChat.setVisibility(View.VISIBLE);
-                    fabChat.setOnClickListener(v -> {
+                    layoutFabChat.setVisibility(View.VISIBLE);
+                    findViewById(R.id.fabChat).setOnClickListener(v -> {
                         Intent intent = new Intent(this, ChatMensajeriaActivity.class);
                         intent.putExtra("id_farmacia", farmaciaId);
                         intent.putExtra("nombre_receptor", tvNombre.getText().toString());
                         startActivity(intent);
                     });
+                    verificarMensajesNuevos();
                 }
 
                 cargarMedicamentos();
             } catch (Exception e) {}
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        actualizarContadorBadge();
+    }
+
+    private void verificarMensajesNuevos() {
+        new Thread(() -> {
+            try {
+                if (Utilidades.hayInternet(this) && farmaciaId != null && usuarioId != null) {
+                    JSONObject selector = new JSONObject();
+                    JSONObject query = new JSONObject();
+                    query.put("id_farmacia", farmaciaId);
+                    query.put("id_usuario", usuarioId);
+                    query.put("tipo_doc", "mensaje");
+                    selector.put("selector", query);
+
+                    String res = new TareaServidor().execute(selector.toString(), "POST", Utilidades.url_mto + "/_find").get();
+                    JSONObject resJson = new JSONObject(res);
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        DBHelper db = new DBHelper(this);
+                        for (int i = 0; i < docs.length(); i++) {
+                            db.guardarMensajeLocal(docs.getJSONObject(i));
+                        }
+                        runOnUiThread(this::actualizarContadorBadge);
+                    }
+                }
+            } catch (Exception e) {}
+            
+            // Re-verificar cada 10 segundos mientras la actividad esté viva
+            if (!isFinishing()) {
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this::verificarMensajesNuevos, 10000);
+            }
+        }).start();
+    }
+
+    private void actualizarContadorBadge() {
+        if (farmaciaId == null || usuarioId == null || tvBadge == null) return;
+        
+        DBHelper db = new DBHelper(this);
+        int noLeidos = db.contarNoLeidosCliente(farmaciaId, usuarioId);
+        if (noLeidos > 0) {
+            tvBadge.setVisibility(View.VISIBLE);
+            tvBadge.setText(String.valueOf(noLeidos));
+        } else {
+            tvBadge.setVisibility(View.GONE);
         }
     }
 

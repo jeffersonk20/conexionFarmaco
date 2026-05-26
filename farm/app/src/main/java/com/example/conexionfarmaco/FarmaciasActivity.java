@@ -60,9 +60,15 @@ public class FarmaciasActivity extends AppCompatActivity {
                     JSONObject resJson = new JSONObject(res);
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
+                        java.util.Set<String> idsServidor = new java.util.HashSet<>();
                         for (int i = 0; i < docs.length(); i++) {
-                            db.guardarFarmaciaCache(docs.getJSONObject(i));
+                            JSONObject f = docs.getJSONObject(i);
+                            idsServidor.add(f.getString("_id"));
+                            db.guardarFarmaciaCache(f);
                         }
+                        
+                        // Limpiar fantasmas
+                        db.purgarFarmaciasHuerfanas(idsServidor);
                         
                         // Recargar desde cache protegido
                         List<JSONObject> updatedCache = db.obtenerFarmaciasCache();

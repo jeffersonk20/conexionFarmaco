@@ -134,7 +134,10 @@ public class HomeActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Sincronizar farmacias primero para que los medicamentos se puedan mostrar (por la restricción de id_farmacia en DBHelper)
+        // Limpieza de farmacias "La Value" fantasmas
+        new DBHelper(this).limpiarFantasmasLaValue();
+        
+        // Sincronizar farmacias primero para que los medicamentos se puedan mostrar
         sincronizarFarmacias();
         // Refrescar promociones por si el admin hizo cambios offline
         cargarPromociones();
@@ -147,7 +150,10 @@ public class HomeActivity extends AppCompatActivity {
             try {
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
-                    selector.put("selector", new JSONObject().put("empresa", new JSONObject().put("$exists", true)));
+                    JSONObject query = new JSONObject();
+                    query.put("empresa", new JSONObject().put("$exists", true));
+                    selector.put("selector", query);
+
                     // Optimización: Solo traer campos necesarios para que sea rápido
                     JSONArray fields = new JSONArray();
                     fields.put("_id"); fields.put("_rev"); fields.put("empresa");
@@ -161,9 +167,15 @@ public class HomeActivity extends AppCompatActivity {
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
                         DBHelper db = new DBHelper(this);
+                        
+                        java.util.Set<String> idsServidor = new java.util.HashSet<>();
                         for (int i = 0; i < docs.length(); i++) {
-                            db.guardarFarmaciaCache(docs.getJSONObject(i));
+                            JSONObject f = docs.getJSONObject(i);
+                            idsServidor.add(f.getString("_id"));
+                            db.guardarFarmaciaCache(f);
                         }
+                        // Limpiar farmacias que ya no existen en la nube
+                        db.purgarFarmaciasHuerfanas(idsServidor);
                     }
                 }
             } catch (Exception e) {
@@ -215,10 +227,16 @@ public class HomeActivity extends AppCompatActivity {
     private void cargarPromociones() {
         new Thread(() -> {
             try {
+                DBHelper db = new DBHelper(this);
+                
+                // 1. CARGA INMEDIATA: Mostrar lo que ya tenemos en el teléfono
+                List<JSONObject> cache = db.obtenerMedicamentosCache(null, true);
+                runOnUiThread(() -> mostrarListaMedicamentos(new JSONArray(cache), containerPromociones));
+
+                // 2. ACTUALIZACIÓN SILENCIOSA: Si hay internet, buscar novedades
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
                     selector.put("selector", new JSONObject().put("promocion", true));
-                    // Optimización: Solo traer campos necesarios para el Home
                     JSONArray fields = new JSONArray();
                     fields.put("_id"); fields.put("_rev"); fields.put("id_farmacia");
                     fields.put("nombre"); fields.put("precio"); fields.put("stock");
@@ -226,29 +244,23 @@ public class HomeActivity extends AppCompatActivity {
                     fields.put("foto1"); fields.put("foto2"); fields.put("foto3");
                     fields.put("nombre_farmacia"); fields.put("enfermedad_objetivo");
                     selector.put("fields", fields);
-                    selector.put("limit", 20); // No traer cientos de productos de golpe
+                    selector.put("limit", 15); // Limitar a las mejores 15 promos para velocidad
 
                     TareaServidor tarea = new TareaServidor();
-                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    // Usar executeOnExecutor para que no bloquee otras descargas
+                    String res = tarea.executeOnExecutor(android.os.AsyncTask.THREAD_POOL_EXECUTOR, selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
-                        DBHelper db = new DBHelper(this);
                         db.limpiarMedicamentosPromocion();
                         for (int i = 0; i < docs.length(); i++) {
-                            JSONObject med = docs.getJSONObject(i);
-                            db.guardarMedicamentoLocal(med);
+                            db.guardarMedicamentoLocal(docs.getJSONObject(i));
                         }
                         
-                        // RECARGAR desde el cache local (que ya tiene el ESCUDO de protección)
-                        List<JSONObject> promosProtegidas = db.obtenerMedicamentosCache(null, true);
-                        runOnUiThread(() -> mostrarListaMedicamentos(new JSONArray(promosProtegidas), containerPromociones));
-                        return;
+                        List<JSONObject> promosActualizadas = db.obtenerMedicamentosCache(null, true);
+                        runOnUiThread(() -> mostrarListaMedicamentos(new JSONArray(promosActualizadas), containerPromociones));
                     }
                 }
-                // Si no hay internet o falló el server, usar caché
-                List<JSONObject> cache = new DBHelper(this).obtenerMedicamentosCache(null, true);
-                runOnUiThread(() -> mostrarListaMedicamentos(new JSONArray(cache), containerPromociones));
             } catch (Exception e) {
                 Log.e("HomeAct", "Error promos", e);
             }
@@ -301,8 +313,9 @@ public class HomeActivity extends AppCompatActivity {
                     selector.put("fields", fields);
                     selector.put("limit", 50);
 
+                    // Usar executeOnExecutor para que no bloquee otras descargas
                     TareaServidor tarea = new TareaServidor();
-                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    String res = tarea.executeOnExecutor(android.os.AsyncTask.THREAD_POOL_EXECUTOR, selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);
                     
                     if (resJson.has("docs")) {

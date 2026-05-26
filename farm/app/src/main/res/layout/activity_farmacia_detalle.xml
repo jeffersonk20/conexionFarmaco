@@ -94,17 +94,36 @@
         app:backgroundTint="@color/azul_vibrante"
         app:tint="@color/white" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabChat"
+    <FrameLayout
+        android:id="@+id/layoutFabChat"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="90dp"
-        android:contentDescription="Chat con farmacia"
-        android:src="@android:drawable/ic_menu_send"
-        android:visibility="gone"
-        app:backgroundTint="@color/azul_primario"
-        app:tint="@color/white" />
+        android:visibility="gone">
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabChat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="Chat con farmacia"
+            android:src="@android:drawable/ic_menu_send"
+            app:backgroundTint="@color/azul_primario"
+            app:tint="@color/white" />
+
+        <TextView
+            android:id="@+id/tvChatBadgeDetalle"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="top|end"
+            android:background="@drawable/badge_unread"
+            android:gravity="center"
+            android:text="1"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

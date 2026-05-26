@@ -99,7 +99,7 @@ public class LoginActivity extends AppCompatActivity {
                 selector.put("limit", 1);
                 
                 TareaServidor tarea = new TareaServidor();
-                String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
+                String respuesta = tarea.executeOnExecutor(android.os.AsyncTask.THREAD_POOL_EXECUTOR, selector.toString(), "POST", Utilidades.url_find).get();
                 JSONObject resJson = new JSONObject(respuesta);
 
                 runOnUiThread(() -> {
