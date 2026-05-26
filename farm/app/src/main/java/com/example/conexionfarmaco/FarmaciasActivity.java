@@ -34,16 +34,19 @@ public class FarmaciasActivity extends AppCompatActivity {
     private void cargarFarmacias() {
         new Thread(() -> {
             try {
+                DBHelper db = new DBHelper(this);
+                
+                // 1. Mostrar cache de inmediato
+                List<JSONObject> cache = db.obtenerFarmaciasCache();
+                runOnUiThread(() -> mostrarFarmacias(new JSONArray(cache)));
+
+                // 2. Si hay internet, intentar actualizar cache
                 if (Utilidades.hayInternet(this)) {
-                    // Traer todas las farmacias. Si CouchDB tiene muchos documentos,
-                    // es mejor buscar por tipo o por un campo que todas tengan.
                     JSONObject selector = new JSONObject();
                     JSONObject query = new JSONObject();
-                    // Intentamos traer documentos que tengan el campo 'empresa' (que son las farmacias)
                     query.put("empresa", new JSONObject().put("$exists", true));
                     selector.put("selector", query);
                     
-                    // Optimización: Solo traer campos necesarios
                     JSONArray fields = new JSONArray();
                     fields.put("_id"); fields.put("_rev"); fields.put("empresa");
                     fields.put("direccion"); fields.put("telefono"); fields.put("correo");
@@ -53,27 +56,19 @@ public class FarmaciasActivity extends AppCompatActivity {
                     
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
-                    Log.d("FarmaciasAct", "Respuesta servidor: " + res);
                     
                     JSONObject resJson = new JSONObject(res);
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
-                        DBHelper db = new DBHelper(this);
-                        db.limpiarFarmaciasCache();
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarFarmaciaCache(docs.getJSONObject(i));
                         }
-                        // Limpiar medicamentos que pertenecían a farmacias borradas
-                        db.limpiarDatosHuerfanos();
-
-                        runOnUiThread(() -> mostrarFarmacias(docs));
-                        return;
+                        
+                        // Recargar desde cache protegido
+                        List<JSONObject> updatedCache = db.obtenerFarmaciasCache();
+                        runOnUiThread(() -> mostrarFarmacias(new JSONArray(updatedCache)));
                     }
                 }
-                // Si offline o falla red
-                List<JSONObject> cache = new DBHelper(this).obtenerFarmaciasCache();
-                Log.d("FarmaciasAct", "Cargando del cache: " + cache.size() + " farmacias");
-                runOnUiThread(() -> mostrarFarmacias(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("FarmaciasAct", "Error carga", e);
             }

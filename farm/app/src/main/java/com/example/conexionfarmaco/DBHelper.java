@@ -93,10 +93,21 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void guardarFarmaciaCache(JSONObject farm) {
+        guardarFarmaciaCache(farm, false);
+    }
+
+    public void guardarFarmaciaCache(JSONObject farm, boolean forzar) {
         try {
+            String id = farm.getString("_id");
+            
+            // ESCUDO: No sobreescribir si hay cambios locales pendientes, a menos que sea forzado (ej: desde SyncWorker)
+            if (!forzar && estaPendienteSincronizacion(id)) {
+                return;
+            }
+
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
-            cv.put("id", farm.getString("_id"));
+            cv.put("id", id);
             cv.put("rev", farm.optString("_rev", ""));
             cv.put("empresa", farm.getString("empresa"));
             cv.put("direccion", farm.optString("direccion", ""));
@@ -135,11 +146,15 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void guardarMedicamentoCache(JSONObject med) {
+        guardarMedicamentoCache(med, false);
+    }
+
+    public void guardarMedicamentoCache(JSONObject med, boolean forzar) {
         try {
             String id = med.getString("_id");
             
             // ESCUDO: No guardar si está pendiente de sincronizar O si está marcado como borrado localmente
-            if (estaPendienteSincronizacion(id) || estaMarcadoComoBorrado(id)) {
+            if (!forzar && (estaPendienteSincronizacion(id) || estaMarcadoComoBorrado(id))) {
                 return;
             }
 
@@ -417,6 +432,7 @@ public class DBHelper extends SQLiteOpenHelper {
                 obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
                 obj.put("descripcion", c.getString(c.getColumnIndexOrThrow("descripcion")));
                 obj.put("chat_habilitado", c.getInt(c.getColumnIndexOrThrow("chat_habilitado")) == 1);
+                obj.put("tipo", "farmacia");
                 c.close();
                 return obj;
             } catch (Exception e) {}
@@ -442,8 +458,21 @@ public class DBHelper extends SQLiteOpenHelper {
     public void guardarMensajeLocal(JSONObject m) {
         try {
             SQLiteDatabase db = getWritableDatabase();
+            String id = m.getString("_id");
+            int leido = m.optInt("leido", 0);
+
+            // ESCUDO: Si el servidor dice que no está leído (0), pero localmente ya lo marcamos como leído (1),
+            // mantenemos el estado local para evitar que la "burbuja" reaparezca por retraso del servidor.
+            if (leido == 0) {
+                Cursor c = db.rawQuery("SELECT leido FROM mensajes WHERE id=?", new String[]{id});
+                if (c.moveToFirst()) {
+                    if (c.getInt(0) == 1) leido = 1;
+                }
+                c.close();
+            }
+
             ContentValues cv = new ContentValues();
-            cv.put("id", m.getString("_id"));
+            cv.put("id", id);
             cv.put("rev", m.optString("_rev", ""));
             cv.put("emisor", m.getString("emisor"));
             cv.put("receptor", m.getString("receptor"));
@@ -451,7 +480,7 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("fecha", m.getString("fecha"));
             cv.put("id_farmacia", m.getString("id_farmacia"));
             cv.put("id_usuario", m.getString("id_usuario"));
-            cv.put("leido", m.optInt("leido", 0));
+            cv.put("leido", leido);
             cv.put("emisor_nombre", m.optString("emisor_nombre", "Desconocido"));
             cv.put("cliente_nombre_completo", m.optString("cliente_nombre_completo", "Cliente"));
             db.insertWithOnConflict("mensajes", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
@@ -488,9 +517,13 @@ public class DBHelper extends SQLiteOpenHelper {
     public List<JSONObject> obtenerConversacionesFarmacia(String farmaciaId) {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
+        
         // Agrupamos por id_usuario para tener una fila por chat, mostrando el último mensaje
-        String sql = "SELECT m.* FROM mensajes m INNER JOIN (SELECT id_usuario, MAX(fecha) as max_fecha FROM mensajes WHERE id_farmacia=? GROUP BY id_usuario) t " +
+        // Además contamos cuántos mensajes NO leídos hay para ese usuario y farmacia
+        String sql = "SELECT m.*, (SELECT COUNT(*) FROM mensajes WHERE id_farmacia=m.id_farmacia AND id_usuario=m.id_usuario AND leido=0 AND emisor != m.id_farmacia) as no_leidos " +
+                     "FROM mensajes m INNER JOIN (SELECT id_usuario, MAX(fecha) as max_fecha FROM mensajes WHERE id_farmacia=? GROUP BY id_usuario) t " +
                      "ON m.id_usuario = t.id_usuario AND m.fecha = t.max_fecha WHERE m.id_farmacia=? ORDER BY m.fecha DESC";
+        
         Cursor c = db.rawQuery(sql, new String[]{farmaciaId, farmaciaId});
         if (c.moveToFirst()) {
             do {
@@ -499,14 +532,24 @@ public class DBHelper extends SQLiteOpenHelper {
                     obj.put("id_usuario", c.getString(c.getColumnIndexOrThrow("id_usuario")));
                     obj.put("ultimo_mensaje", c.getString(c.getColumnIndexOrThrow("mensaje")));
                     obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
-                    // Ahora usamos el campo específico que guarda siempre el nombre del cliente
                     obj.put("nombre_cliente", c.getString(c.getColumnIndexOrThrow("cliente_nombre_completo")));
+                    obj.put("no_leidos", c.getInt(c.getColumnIndexOrThrow("no_leidos")));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (c.moveToNext());
         }
         c.close();
         return lista;
+    }
+
+    public void marcarComoLeido(String farmaciaId, String usuarioId, String idPropio) {
+        try {
+            SQLiteDatabase db = getWritableDatabase();
+            android.content.ContentValues cv = new android.content.ContentValues();
+            cv.put("leido", 1);
+            // Marcamos como leído todo lo que NO hayamos enviado nosotros (el emisor no es idPropio)
+            db.update("mensajes", cv, "id_farmacia=? AND id_usuario=? AND emisor != ?", new String[]{farmaciaId, usuarioId, idPropio});
+        } catch (Exception e) {}
     }
 
     public Cursor loginFarmacia(String correo, String clave) {

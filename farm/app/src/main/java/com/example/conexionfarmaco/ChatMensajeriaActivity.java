@@ -26,6 +26,7 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
     private EditText etMensaje;
     private ImageButton btnEnviar;
     private DBHelper db;
+    private android.widget.ProgressBar pb;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +37,7 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
         rvMensajes = findViewById(R.id.rvMensajes);
         etMensaje = findViewById(R.id.etMensajeChat);
         btnEnviar = findViewById(R.id.btnEnviarChat);
+        pb = findViewById(R.id.pbChat);
         TextView tvTitulo = findViewById(R.id.tvNombreReceptor);
 
         idFarmacia = getIntent().getStringExtra("id_farmacia");
@@ -81,11 +83,18 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
     }
 
     private void cargarMensajes() {
+        // Solo mostrar cargando la primera vez
+        if (listaMensajes.isEmpty()) pb.setVisibility(android.view.View.VISIBLE);
+        
         new Thread(() -> {
             try {
+                // Marcar como leídos al abrir el chat
+                db.marcarComoLeido(idFarmacia, idUsuario, idPropio);
+
                 // Primero cargar de local
                 List<JSONObject> locales = db.obtenerMensajesChat(idFarmacia, idUsuario);
                 runOnUiThread(() -> {
+                    pb.setVisibility(android.view.View.GONE);
                     listaMensajes.clear();
                     listaMensajes.addAll(locales);
                     adapter.notifyDataSetChanged();
@@ -109,6 +118,9 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarMensajeLocal(docs.getJSONObject(i));
                         }
+                        // Marcar de nuevo tras descargar nuevos
+                        db.marcarComoLeido(idFarmacia, idUsuario, idPropio);
+                        
                         // Recargar lista combinada
                         List<JSONObject> actualizados = db.obtenerMensajesChat(idFarmacia, idUsuario);
                         runOnUiThread(() -> {
@@ -121,6 +133,7 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
                 }
             } catch (Exception e) {
                 Log.e("Chat", "Error carga", e);
+                runOnUiThread(() -> pb.setVisibility(android.view.View.GONE));
             }
         }).start();
     }

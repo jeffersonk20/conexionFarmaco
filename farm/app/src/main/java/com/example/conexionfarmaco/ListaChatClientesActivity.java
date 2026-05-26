@@ -21,6 +21,8 @@ public class ListaChatClientesActivity extends AppCompatActivity {
     private ChatClientesAdapter adapter;
     private List<JSONObject> listaConversaciones = new ArrayList<>();
     private String farmaciaId;
+    private android.widget.ProgressBar pb;
+    private TextView tvSinChats;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,6 +30,9 @@ public class ListaChatClientesActivity extends AppCompatActivity {
         setContentView(R.layout.activity_lista_chat_clientes);
 
         rv = findViewById(R.id.rvListaChatClientes);
+        pb = findViewById(R.id.pbListaChat);
+        tvSinChats = findViewById(R.id.tvSinChats);
+        
         farmaciaId = getSharedPreferences("AdminPrefs", MODE_PRIVATE).getString("farmaciaId", "");
 
         adapter = new ChatClientesAdapter(listaConversaciones);
@@ -44,6 +49,9 @@ public class ListaChatClientesActivity extends AppCompatActivity {
     }
 
     private void cargarConversaciones() {
+        pb.setVisibility(View.VISIBLE);
+        tvSinChats.setVisibility(View.GONE);
+        
         new Thread(() -> {
             try {
                 DBHelper db = new DBHelper(this);
@@ -70,13 +78,16 @@ public class ListaChatClientesActivity extends AppCompatActivity {
                 // Cargar desde cache agrupado
                 List<JSONObject> chats = db.obtenerConversacionesFarmacia(farmaciaId);
                 runOnUiThread(() -> {
+                    pb.setVisibility(View.GONE);
                     listaConversaciones.clear();
                     listaConversaciones.addAll(chats);
                     adapter.notifyDataSetChanged();
+                    if (chats.isEmpty()) tvSinChats.setVisibility(View.VISIBLE);
                 });
 
             } catch (Exception e) {
                 Log.e("ChatList", "Error", e);
+                runOnUiThread(() -> pb.setVisibility(View.GONE));
             }
         }).start();
     }
@@ -88,7 +99,7 @@ public class ListaChatClientesActivity extends AppCompatActivity {
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = getLayoutInflater().inflate(android.R.layout.simple_list_item_2, parent, false);
+            View v = getLayoutInflater().inflate(R.layout.item_conversacion, parent, false);
             return new VH(v);
         }
 
@@ -98,6 +109,18 @@ public class ListaChatClientesActivity extends AppCompatActivity {
                 JSONObject obj = items.get(position);
                 holder.t1.setText(obj.optString("nombre_cliente", "Cliente " + (position + 1)));
                 holder.t2.setText(obj.optString("ultimo_mensaje", ""));
+                
+                int noLeidos = obj.optInt("no_leidos", 0);
+                if (noLeidos > 0) {
+                    holder.badge.setVisibility(View.VISIBLE);
+                    holder.badge.setText(String.valueOf(noLeidos));
+                    holder.t2.setTypeface(null, android.graphics.Typeface.BOLD);
+                    holder.t2.setTextColor(android.graphics.Color.parseColor("#000000")); // Negro total para no leídos
+                } else {
+                    holder.badge.setVisibility(View.GONE);
+                    holder.t2.setTypeface(null, android.graphics.Typeface.NORMAL);
+                    holder.t2.setTextColor(android.graphics.Color.parseColor("#333333")); // Gris muy oscuro para leídos
+                }
                 
                 holder.itemView.setOnClickListener(v -> {
                     Intent intent = new Intent(ListaChatClientesActivity.this, ChatMensajeriaActivity.class);
@@ -112,13 +135,12 @@ public class ListaChatClientesActivity extends AppCompatActivity {
         @Override public int getItemCount() { return items.size(); }
 
         class VH extends RecyclerView.ViewHolder {
-            TextView t1, t2;
+            TextView t1, t2, badge;
             VH(View v) {
                 super(v);
-                t1 = v.findViewById(android.R.id.text1);
-                t2 = v.findViewById(android.R.id.text2);
-                t1.setTextColor(getResources().getColor(R.color.azul_primario));
-                t1.setTextSize(18);
+                t1 = v.findViewById(R.id.tvChatNombre);
+                t2 = v.findViewById(R.id.tvChatUltimoMsg);
+                badge = v.findViewById(R.id.tvChatBadge);
             }
         }
     }

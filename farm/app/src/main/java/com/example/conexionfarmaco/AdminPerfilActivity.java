@@ -107,18 +107,35 @@ public class AdminPerfilActivity extends AppCompatActivity {
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             try {
                 Uri uri = data.getData();
-                imgLogo.setImageURI(uri);
                 InputStream is = getContentResolver().openInputStream(uri);
                 Bitmap bitmap = BitmapFactory.decodeStream(is);
                 
+                // Redimensionar para optimizar
+                bitmap = redimensionarBitmap(bitmap, 500);
+                imgLogo.setImageBitmap(bitmap);
+                
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos);
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
                 byte[] bytes = baos.toByteArray();
                 fotoBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
             } catch (Exception e) {
                 Toast.makeText(this, "Error al procesar imagen", Toast.LENGTH_SHORT).show();
             }
         }
+    }
+
+    private Bitmap redimensionarBitmap(Bitmap image, int maxSize) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        float ratio = (float) width / (float) height;
+        if (ratio > 1) {
+            width = maxSize;
+            height = (int) (width / ratio);
+        } else {
+            height = maxSize;
+            width = (int) (height * ratio);
+        }
+        return Bitmap.createScaledBitmap(image, width, height, true);
     }
 
     private void guardarCambios() {
@@ -149,11 +166,14 @@ public class AdminPerfilActivity extends AppCompatActivity {
             db.administrarFarmacias("modificar", new String[]{
                     farmaciaId,
                     farmaciaActual.optString("_rev", ""),
-                    nom, dir, tel, 
+                    nom,
+                    dir,
+                    tel,
                     farmaciaActual.optString("correo", ""),
                     farmaciaActual.optString("clave", ""),
                     farmaciaActual.optString("foto", ""),
-                    des
+                    des,
+                    farmaciaActual.optBoolean("chat_habilitado", false) ? "1" : "0"
             });
 
             // Sincronizar con la nube
@@ -197,7 +217,8 @@ public class AdminPerfilActivity extends AppCompatActivity {
                                 farmaciaActual.optString("correo", ""),
                                 farmaciaActual.optString("clave", ""),
                                 farmaciaActual.optString("foto", ""),
-                                farmaciaActual.optString("descripcion", "")
+                                farmaciaActual.optString("descripcion", ""),
+                                farmaciaActual.optBoolean("chat_habilitado", false) ? "1" : "0"
                         });
                         runOnUiThread(() -> actualizarUI(farmaciaActual));
                     }

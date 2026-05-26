@@ -97,11 +97,11 @@ public class SyncWorker extends Worker {
             localObj.put("_rev", nuevo_rev);
             
             if (url.contains("medicamentos")) {
-                dbHelper.guardarMedicamentoLocal(localObj);
+                dbHelper.guardarMedicamentoCache(localObj, true);
             } else if (url.contains("pedidos")) {
                 dbHelper.guardarPedidoLocal(localObj);
             } else if (url.contains("farmacias")) {
-                dbHelper.guardarFarmaciaCache(localObj);
+                dbHelper.guardarFarmaciaCache(localObj, true);
             } else if (url.contains("usuarios")) {
                 String[] datos = {
                     id_couch, nuevo_rev, localObj.optString("nombres"), localObj.optString("apellidos"),

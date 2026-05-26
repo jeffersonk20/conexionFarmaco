@@ -42,6 +42,12 @@ public class MensajeriaAdapter extends RecyclerView.Adapter<MensajeriaAdapter.Vi
         try {
             JSONObject msg = mensajes.get(position);
             holder.tvMensaje.setText(msg.getString("mensaje"));
+            // Aseguramos que el texto sea 100% opaco y legible
+            if (getItemViewType(position) == 0) {
+                holder.tvMensaje.setTextColor(android.graphics.Color.WHITE);
+            } else {
+                holder.tvMensaje.setTextColor(android.graphics.Color.parseColor("#1B4F72")); // Azul Primario sólido
+            }
         } catch (Exception e) {}
     }
 
