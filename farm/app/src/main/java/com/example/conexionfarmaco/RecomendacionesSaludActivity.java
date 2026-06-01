@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Button;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -143,11 +144,27 @@ public class RecomendacionesSaludActivity extends AppCompatActivity {
         TextView tvFarmacia = card.findViewById(R.id.tvMedFarmacia);
         TextView tvPrecio = card.findViewById(R.id.tvMedPrecio);
         TextView tvPres = card.findViewById(R.id.tvMedPresentacion);
+        TextView tvStock = card.findViewById(R.id.tvMedStock);
+        Button btnAdd = card.findViewById(R.id.btnAgregarAlCarrito);
 
         tvNombre.setText(med.getString("nombre"));
         tvFarmacia.setText("Disponible en: " + med.optString("nombre_farmacia", "Farmacia"));
         tvPrecio.setText("$" + med.getString("precio"));
         tvPres.setText(med.optString("presentacion", ""));
+
+        // Manejo de Stock
+        int stock = med.optInt("stock", 0);
+        if (stock > 0) {
+            tvStock.setText("Disponibles: " + stock);
+            tvStock.setTextColor(android.graphics.Color.GRAY);
+            btnAdd.setEnabled(true);
+            btnAdd.setAlpha(1.0f);
+        } else {
+            tvStock.setText("Agotado");
+            tvStock.setTextColor(android.graphics.Color.RED);
+            btnAdd.setEnabled(false);
+            btnAdd.setAlpha(0.5f);
+        }
 
         // Manejo de fotos
         LinearLayout layoutFotos = card.findViewById(R.id.layoutFotosMed);
