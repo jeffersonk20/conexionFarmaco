@@ -23,6 +23,15 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
+                <ImageView
+                    android:id="@+id/ivDetalleLogoFarmacia"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:layout_marginBottom="8dp"
+                    android:scaleType="centerCrop"
+                    android:src="@android:drawable/ic_menu_myplaces"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/tvDetalleNombreFarmacia"
                     android:layout_width="wrap_content"
@@ -73,6 +82,13 @@
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="16dp" />
+
+            <ProgressBar
+                android:id="@+id/progressDetalleMed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:id="@+id/containerMedicamentosFarmacia"

@@ -14,7 +14,7 @@ import java.util.List;
 
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "conexion_farmaco.db";
-    private static final int DATABASE_VERSION = 16;
+    private static final int DATABASE_VERSION = 20;
 
     public DBHelper(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -26,8 +26,15 @@ public class DBHelper extends SQLiteOpenHelper {
                 "direccion TEXT, alergias TEXT, tipo_sangre TEXT, enfermedades TEXT, foto TEXT)");
         db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, rev TEXT, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT, chat_habilitado INTEGER DEFAULT 0)");
         db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, rev TEXT, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, foto2 TEXT, foto3 TEXT, nombre_farmacia TEXT, enfermedad_objetivo TEXT, is_deleted INTEGER DEFAULT 0)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_farmacia ON medicamentos(id_farmacia)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_enfermedad ON medicamentos(enfermedad_objetivo)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_deleted ON medicamentos(is_deleted)");
         db.execSQL("CREATE TABLE pedidos (id TEXT PRIMARY KEY, rev TEXT, cliente_correo TEXT, cliente_nombre TEXT, cliente_direccion TEXT, cliente_telefono TEXT, items TEXT, total TEXT, fecha TEXT, estado TEXT, metodo_pago TEXT, farmacias_ids TEXT)");
-        db.execSQL("CREATE TABLE mensajes (id TEXT PRIMARY KEY, rev TEXT, emisor TEXT, receptor TEXT, mensaje TEXT, fecha TEXT, id_farmacia TEXT, id_usuario TEXT, leido INTEGER DEFAULT 0, emisor_nombre TEXT, cliente_nombre_completo TEXT)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pedidos_correo ON pedidos(cliente_correo)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pedidos_fecha ON pedidos(fecha)");
+        db.execSQL("CREATE TABLE mensajes (id TEXT PRIMARY KEY, rev TEXT, emisor TEXT, receptor TEXT, mensaje TEXT, fecha TEXT, id_farmacia TEXT, id_usuario TEXT, leido INTEGER DEFAULT 0, emisor_nombre TEXT, cliente_nombre_completo TEXT, cliente_foto TEXT, farmacia_foto TEXT)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_mensajes_chat ON mensajes(id_farmacia, id_usuario)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_mensajes_fecha ON mensajes(fecha)");
         db.execSQL("CREATE TABLE pendientes (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT, metodo TEXT, json TEXT, tipo TEXT)");
     }
 
@@ -53,6 +60,23 @@ public class DBHelper extends SQLiteOpenHelper {
         }
         if (oldVersion < 16) {
             try { db.execSQL("ALTER TABLE mensajes ADD COLUMN cliente_nombre_completo TEXT"); } catch (Exception e) {}
+        }
+        if (oldVersion < 17) {
+            try { db.execSQL("ALTER TABLE mensajes ADD COLUMN cliente_foto TEXT"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE mensajes ADD COLUMN farmacia_foto TEXT"); } catch (Exception e) {}
+        }
+        if (oldVersion < 18) {
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_mensajes_chat ON mensajes(id_farmacia, id_usuario)"); } catch (Exception e) {}
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_mensajes_fecha ON mensajes(fecha)"); } catch (Exception e) {}
+        }
+        if (oldVersion < 19) {
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_pedidos_correo ON pedidos(cliente_correo)"); } catch (Exception e) {}
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_pedidos_fecha ON pedidos(fecha)"); } catch (Exception e) {}
+        }
+        if (oldVersion < 20) {
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_farmacia ON medicamentos(id_farmacia)"); } catch (Exception e) {}
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_enfermedad ON medicamentos(enfermedad_objetivo)"); } catch (Exception e) {}
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_deleted ON medicamentos(is_deleted)"); } catch (Exception e) {}
         }
     }
 
@@ -377,13 +401,65 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void administrarUsuarios(String accion, String[] datos) {
-        SQLiteDatabase db = getWritableDatabase();
-        if (accion.equals("nuevo")) {
-            db.execSQL("INSERT OR REPLACE INTO usuarios(id, rev, nombres, apellidos, telefono, correo, clave, direccion, alergias, tipo_sangre, enfermedades, foto) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", datos);
-        } else if (accion.equals("modificar")) {
-            db.execSQL("UPDATE usuarios SET rev=?, nombres=?, apellidos=?, telefono=?, correo=?, clave=?, direccion=?, alergias=?, tipo_sangre=?, enfermedades=?, foto=? WHERE id=?", 
-                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[10], datos[11], datos[0]});
+        try {
+            String id = datos[0];
+            String nuevaFoto = datos[11];
+            
+            // Lógica de Protección de Foto:
+            // Si el servidor ("nuevo") intenta mandarnos una foto pero tenemos cambios locales pendientes,
+            // o si la foto que viene del servidor está vacía pero nosotros YA tenemos una local, preservamos la nuestra.
+            JSONObject local = obtenerUsuarioLocal(id);
+            if (local != null) {
+                String fotoLocal = local.optString("foto", "");
+                if (accion.equals("nuevo")) {
+                    if (estaPendienteSincronizacion(id) || (nuevaFoto.isEmpty() && !fotoLocal.isEmpty())) {
+                        nuevaFoto = fotoLocal;
+                    }
+                }
+            }
+
+            SQLiteDatabase db = getWritableDatabase();
+            ContentValues cv = new ContentValues();
+            cv.put("id", id);
+            cv.put("rev", datos[1]);
+            cv.put("nombres", datos[2]);
+            cv.put("apellidos", datos[3]);
+            cv.put("telefono", datos[4]);
+            cv.put("correo", datos[5]);
+            cv.put("clave", datos[6]);
+            cv.put("direccion", datos[7]);
+            cv.put("alergias", datos[8]);
+            cv.put("tipo_sangre", datos[9]);
+            cv.put("enfermedades", datos[10]);
+            cv.put("foto", nuevaFoto);
+            db.insertWithOnConflict("usuarios", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+        } catch (Exception e) {
+            Log.e("DBHelper", "Error admin usuarios", e);
         }
+    }
+
+    public JSONObject obtenerUsuarioLocal(String id) {
+        Cursor c = getReadableDatabase().rawQuery("SELECT * FROM usuarios WHERE id=?", new String[]{id});
+        if (c.moveToFirst()) {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                obj.put("nombres", c.getString(c.getColumnIndexOrThrow("nombres")));
+                obj.put("apellidos", c.getString(c.getColumnIndexOrThrow("apellidos")));
+                obj.put("telefono", c.getString(c.getColumnIndexOrThrow("telefono")));
+                obj.put("correo", c.getString(c.getColumnIndexOrThrow("correo")));
+                obj.put("clave", c.getString(c.getColumnIndexOrThrow("clave")));
+                obj.put("direccion", c.getString(c.getColumnIndexOrThrow("direccion")));
+                obj.put("alergias", c.getString(c.getColumnIndexOrThrow("alergias")));
+                obj.put("tipo_sangre", c.getString(c.getColumnIndexOrThrow("tipo_sangre")));
+                obj.put("enfermedades", c.getString(c.getColumnIndexOrThrow("enfermedades")));
+                obj.put("foto", c.getString(c.getColumnIndexOrThrow("foto")));
+                c.close(); return obj;
+            } catch (Exception e) {}
+        }
+        if (c != null) c.close();
+        return null;
     }
 
     public Cursor login(String correo, String clave) {
@@ -410,6 +486,8 @@ public class DBHelper extends SQLiteOpenHelper {
             cv.put("leido", leido);
             cv.put("emisor_nombre", m.optString("emisor_nombre", "Desconocido"));
             cv.put("cliente_nombre_completo", m.optString("cliente_nombre_completo", "Cliente"));
+            cv.put("cliente_foto", m.optString("cliente_foto", ""));
+            cv.put("farmacia_foto", m.optString("farmacia_foto", ""));
             db.insertWithOnConflict("mensajes", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         } catch (Exception e) {}
     }
@@ -431,6 +509,8 @@ public class DBHelper extends SQLiteOpenHelper {
                     obj.put("id_usuario", c.getString(c.getColumnIndexOrThrow("id_usuario")));
                     obj.put("leido", c.getInt(c.getColumnIndexOrThrow("leido")));
                     obj.put("emisor_nombre", c.getString(c.getColumnIndexOrThrow("emisor_nombre")));
+                    obj.put("cliente_foto", c.getString(c.getColumnIndexOrThrow("cliente_foto")));
+                    obj.put("farmacia_foto", c.getString(c.getColumnIndexOrThrow("farmacia_foto")));
                     lista.add(obj);
                 } catch (Exception e) {}
             } while (c.moveToNext());
@@ -454,6 +534,7 @@ public class DBHelper extends SQLiteOpenHelper {
                     obj.put("ultimo_mensaje", c.getString(c.getColumnIndexOrThrow("mensaje")));
                     obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
                     obj.put("nombre_cliente", c.getString(c.getColumnIndexOrThrow("cliente_nombre_completo")));
+                    obj.put("cliente_foto", c.getString(c.getColumnIndexOrThrow("cliente_foto")));
                     obj.put("no_leidos", c.getInt(c.getColumnIndexOrThrow("no_leidos")));
                     lista.add(obj);
                 } catch (Exception e) {}
@@ -483,12 +564,25 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void administrarFarmacias(String accion, String[] datos) {
-        SQLiteDatabase db = getWritableDatabase();
-        if (accion.equals("nuevo")) {
-            db.execSQL("INSERT OR REPLACE INTO farmacias(id, rev, empresa, direccion, telefono, correo, clave, foto, descripcion, chat_habilitado) VALUES(?,?,?,?,?,?,?,?,?,?)", datos);
-        } else if (accion.equals("modificar")) {
-            db.execSQL("UPDATE farmacias SET rev=?, empresa=?, direccion=?, telefono=?, correo=?, clave=?, foto=?, descripcion=?, chat_habilitado=? WHERE id=?", 
-                new String[]{datos[1], datos[2], datos[3], datos[4], datos[5], datos[6], datos[7], datos[8], datos[9], datos[0]});
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("_id", datos[0]);
+            obj.put("_rev", datos[1]);
+            obj.put("empresa", datos[2]);
+            obj.put("direccion", datos[3]);
+            obj.put("telefono", datos[4]);
+            obj.put("correo", datos[5]);
+            obj.put("clave", datos[6]);
+            obj.put("foto", datos[7]);
+            obj.put("descripcion", datos[8]);
+            obj.put("chat_habilitado", datos[9].equals("1"));
+            
+            // Si es una actualización de Perfil (modificar), forzamos.
+            // Si es una carga de Login (nuevo), NO forzamos si hay algo pendiente localmente.
+            boolean forzar = accion.equals("modificar");
+            guardarFarmaciaCache(obj, forzar);
+        } catch (Exception e) {
+            Log.e("DBHelper", "Error en administrarFarmacias", e);
         }
     }
 

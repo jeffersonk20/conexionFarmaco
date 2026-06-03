@@ -13,6 +13,10 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 import android.util.Log;
+import android.media.ExifInterface;
+import android.graphics.Matrix;
+import android.net.Uri;
+import java.io.InputStream;
 
 import com.google.ai.client.generativeai.GenerativeModel;
 import com.google.ai.client.generativeai.java.GenerativeModelFutures;
@@ -33,28 +37,47 @@ import com.google.ai.client.generativeai.type.HarmCategory;
 import com.google.ai.client.generativeai.type.SafetySetting;
 import com.google.ai.client.generativeai.type.RequestOptions;
 import java.util.Collections;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import android.util.LruCache;
 
 public class Utilidades {
+    private static LruCache<String, Bitmap> bitmapCache;
+    private static final ExecutorService imageExecutor = Executors.newFixedThreadPool(4);
+
+    static {
+        // Inicializar cache (1/8 de la memoria disponible)
+        final int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
+        final int cacheSize = maxMemory / 8;
+        bitmapCache = new LruCache<String, Bitmap>(cacheSize) {
+            @Override
+            protected int sizeOf(String key, Bitmap bitmap) {
+                return bitmap.getByteCount() / 1024;
+            }
+        };
+    }
+
     // ... URLs ...
-    static String url_consulta = "http://192.168.82.64:5984/usuarios/_design/usuarios/_view/usuarios";
-    static String url_mto = "http://192.168.82.64:5984/usuarios";
-    static String url_find = "http://192.168.82.64:5984/usuarios/_find";
+    static String url_consulta = "http://192.168.101.10:5984/usuarios/_design/usuarios/_view/usuarios";
+    static String url_mto = "http://192.168.101.10:5984/usuarios";
+    static String url_find = "http://192.168.101.10:5984/usuarios/_find";
     
     // Rutas para el sistema de Farmacias
-    static String url_farmacias = "http://192.168.82.64:5984/farmacias";
-    static String url_medicamentos = "http://192.168.82.64:5984/medicamentos";
-    static String url_pedidos = "http://192.168.82.64:5984/pedidos";
+    static String url_farmacias = "http://192.168.101.10:5984/farmacias";
+    static String url_medicamentos = "http://192.168.101.10:5984/medicamentos";
+    static String url_pedidos = "http://192.168.101.10:5984/pedidos";
     
     // Selectores CouchDB
-    static String url_find_farmacias = "http://192.168.82.64:5984/farmacias/_find";
-    static String url_find_medicamentos = "http://192.168.82.64:5984/medicamentos/_find";
-    static String url_find_pedidos = "http://192.168.82.64:5984/pedidos/_find";
+    static String url_find_farmacias = "http://192.168.101.10:5984/farmacias/_find";
+    static String url_find_medicamentos = "http://192.168.101.10:5984/medicamentos/_find";
+    static String url_find_pedidos = "http://192.168.101.10:5984/pedidos/_find";
 
     static String user = "steven";
     static String passwd = "200612";
     static String credencialesCodificadas = Base64.encodeToString((user + ":" + passwd).getBytes(), Base64.NO_WRAP);
 
-    private static final String GEMINI_API_KEY = "#";
+    private static final String GEMINI_API_KEY = "AIzaSyC3sTFfNZSJ8I8JmHvpGAUw9ScrwkX1q2M";
 
     private static GenerativeModelFutures modelInstance;
 
@@ -79,19 +102,23 @@ public class Utilidades {
         StringBuilder inventario = new StringBuilder();
         try {
             DBHelper db = new DBHelper(context);
-            List<JSONObject> todos = db.obtenerMedicamentosCache(null, false);
+            // Limpiar la pregunta para extraer la palabra clave del medicamento
+            String queryBusqueda = preguntaCliente.toLowerCase()
+                    .replace("¿", "").replace("?", "").replace("tienen", "")
+                    .replace("venden", "").replace("busco", "").replace("hay", "")
+                    .replace("necesito", "").trim();
+
+            List<JSONObject> recomendados = db.obtenerMedicamentosCache(queryBusqueda, false);
             
-            // Filtro ultra-rápido: solo enviamos lo que coincida con la pregunta
             int encontrados = 0;
-            String q = preguntaCliente.toLowerCase();
-            for (JSONObject med : todos) {
-                if (encontrados >= 10) break; // Límite estricto de 10 items para no agotar cuota
-                String nombre = med.optString("nombre", "").toLowerCase();
-                if (q.contains(nombre) || nombre.contains(q)) {
-                    inventario.append("- ").append(med.optString("nombre"))
-                            .append(": $").append(med.optString("precio"))
-                            .append(" en ").append(med.optString("nombre_farmacia"))
-                            .append(" (Stock: ").append(med.optString("stock")).append(")\n");
+            for (JSONObject med : recomendados) {
+                if (encontrados >= 5) break; // Suficientes opciones para ser breve
+                int stock = med.optInt("stock", 0);
+                if (stock > 0) {
+                    inventario.append("PRODUCTO: ").append(med.optString("nombre"))
+                            .append(" | PRECIO: $").append(med.optString("precio"))
+                            .append(" | FARMACIA: ").append(med.optString("nombre_farmacia"))
+                            .append("\n");
                     encontrados++;
                 }
             }
@@ -99,8 +126,13 @@ public class Utilidades {
             Log.e("IA", "Error", e);
         }
 
-        String prompt = "Eres farmacéutico. Inventario actual:\n" + inventario +
-                "\nInstrucción: Si el producto está arriba con stock > 0, di dónde está y precio. Si no está, di que no hay. No uses asteriscos ni negritas. Sé breve.\n" +
+        String prompt = "Actúa como un buscador de inventario farmacéutico estricto. " +
+                "DATOS REALES:\n" + (inventario.length() > 0 ? inventario.toString() : "SIN EXISTENCIAS") + "\n\n" +
+                "REGLAS:\n" +
+                "1. Si el producto solicitado está en los DATOS REALES, responde únicamente: 'Disponible en [Nombre Farmacia] a un precio de $[Precio]'.\n" +
+                "2. Si los DATOS REALES son 'SIN EXISTENCIAS', responde exactamente: 'Lo sentimos, no hay disponibilidad de este producto'.\n" +
+                "3. Prohibido usar asteriscos, negritas, Markdown o dar consejos médicos.\n" +
+                "4. Sé extremadamente breve.\n\n" +
                 "Pregunta: " + preguntaCliente;
 
         Content content = new Content.Builder().addText(prompt).build();
@@ -156,40 +188,95 @@ public class Utilidades {
     public static void cargarImagenBase64(String base64, ImageView iv) {
         if (base64 == null || base64.isEmpty()) return;
 
-        try {
-            iv.setColorFilter(null);
-            iv.setPadding(0, 0, 0, 0);
+        // Intentar recuperar de caché primero para evitar decodificación costosa
+        Bitmap cached = bitmapCache.get(base64);
+        if (cached != null) {
+            iv.setImageBitmap(cached);
+            return;
+        }
 
-            if (base64.startsWith("content://") || base64.startsWith("file://")) {
-                iv.setImageURI(android.net.Uri.parse(base64));
-                return;
-            }
-
-            if (base64.startsWith("/") && base64.length() < 1000) {
-                java.io.File file = new java.io.File(base64);
-                if (file.exists()) {
-                    Bitmap bmp = BitmapFactory.decodeFile(file.getAbsolutePath());
-                    if (bmp != null) {
-                        iv.setImageBitmap(bmp);
-                        return;
+        // Si no está en caché, decodificar en segundo plano para no congelar la UI
+        imageExecutor.execute(() -> {
+            try {
+                Bitmap bmp = null;
+                
+                if (base64.startsWith("content://") || base64.startsWith("file://")) {
+                    Uri uri = Uri.parse(base64);
+                    bmp = obtenerBitmapRotado(iv.getContext(), uri);
+                } else if (base64.startsWith("/") && base64.length() < 1000) {
+                    java.io.File file = new java.io.File(base64);
+                    if (file.exists()) {
+                        bmp = obtenerBitmapRotado(file.getAbsolutePath());
                     }
+                } else {
+                    String pureBase64 = base64;
+                    if (pureBase64.contains(",")) {
+                        pureBase64 = pureBase64.split(",")[1];
+                    }
+                    byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT);
+                    bmp = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
                 }
-            }
 
-            String pureBase64 = base64;
-            if (pureBase64.contains(",")) {
-                pureBase64 = pureBase64.split(",")[1];
+                if (bmp != null) {
+                    final Bitmap finalBmp = bmp;
+                    bitmapCache.put(base64, finalBmp);
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                        iv.setColorFilter(null);
+                        iv.setPadding(0, 0, 0, 0);
+                        iv.setImageBitmap(finalBmp);
+                    });
+                }
+            } catch (Exception e) {
+                Log.e("Utilidades", "Error cargando imagen: " + e.getMessage());
             }
+        });
+    }
 
-            // OPTIMIZACIÓN: Evitar replaceAll con regex en strings gigantes. 
-            // Base64.decode ya maneja espacios y saltos de línea con los flags adecuados.
-            byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT);
-            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-            if (decodedByte != null) {
-                iv.setImageBitmap(decodedByte);
+    public static Bitmap obtenerBitmapRotado(Context context, Uri uri) {
+        try {
+            InputStream is = context.getContentResolver().openInputStream(uri);
+            Bitmap bitmap = BitmapFactory.decodeStream(is);
+            if (is != null) is.close();
+
+            ExifInterface exifInterface;
+            InputStream isExif = context.getContentResolver().openInputStream(uri);
+            if (isExif != null) {
+                exifInterface = new ExifInterface(isExif);
+                int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                isExif.close();
+                return rotarBitmap(bitmap, orientation);
             }
+            return bitmap;
         } catch (Exception e) {
-            Log.e("Utilidades", "Error cargando imagen: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static Bitmap obtenerBitmapRotado(String path) {
+        try {
+            Bitmap bitmap = BitmapFactory.decodeFile(path);
+            ExifInterface exifInterface = new ExifInterface(path);
+            int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            return rotarBitmap(bitmap, orientation);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Bitmap rotarBitmap(Bitmap bitmap, int orientation) {
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_ROTATE_90: matrix.setRotate(90); break;
+            case ExifInterface.ORIENTATION_ROTATE_180: matrix.setRotate(180); break;
+            case ExifInterface.ORIENTATION_ROTATE_270: matrix.setRotate(270); break;
+            default: return bitmap;
+        }
+        try {
+            Bitmap rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+            bitmap.recycle();
+            return rotated;
+        } catch (OutOfMemoryError e) {
+            return bitmap;
         }
     }
 

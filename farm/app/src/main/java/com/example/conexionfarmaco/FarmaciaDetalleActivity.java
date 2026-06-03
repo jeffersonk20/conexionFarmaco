@@ -14,11 +14,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
+import java.util.ArrayList;
 
 public class FarmaciaDetalleActivity extends AppCompatActivity {
 
     private TextView tvNombre, tvDesc, tvBadge;
     private LinearLayout containerMed;
+    private android.widget.ProgressBar progress;
     private String farmaciaId, usuarioId;
     private View layoutFabChat;
 
@@ -32,6 +35,7 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
         tvBadge = findViewById(R.id.tvChatBadgeDetalle);
         containerMed = findViewById(R.id.containerMedicamentosFarmacia);
         layoutFabChat = findViewById(R.id.layoutFabChat);
+        progress = findViewById(R.id.progressDetalleMed);
 
         findViewById(R.id.toolbarDetalle).setOnClickListener(v -> finish());
 
@@ -49,6 +53,13 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
                 tvNombre.setText(farmacia.getString("empresa"));
                 tvDesc.setText(farmacia.optString("descripcion", ""));
 
+                ImageView ivLogo = findViewById(R.id.ivDetalleLogoFarmacia);
+                String foto = farmacia.optString("foto", "");
+                if (!foto.isEmpty()) {
+                    ivLogo.setVisibility(View.VISIBLE);
+                    Utilidades.cargarImagenBase64(foto, ivLogo);
+                }
+
                 String telefono = farmacia.optString("telefono", "");
                 FloatingActionButton fab = findViewById(R.id.fabLlamar);
                 if (!telefono.isEmpty()) {
@@ -64,6 +75,7 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
                         Intent intent = new Intent(this, ChatMensajeriaActivity.class);
                         intent.putExtra("id_farmacia", farmaciaId);
                         intent.putExtra("nombre_receptor", tvNombre.getText().toString());
+                        intent.putExtra("foto_receptor", farmacia.optString("foto", ""));
                         startActivity(intent);
                     });
                     verificarMensajesNuevos();
@@ -135,51 +147,68 @@ public class FarmaciaDetalleActivity extends AppCompatActivity {
     }
 
     private void cargarMedicamentos() {
+        if (farmaciaId == null) return;
+        
+        // 1. Mostrar carga y limpiar
+        progress.setVisibility(View.VISIBLE);
+        containerMed.removeAllViews();
+
+        // 2. Carga inmediata desde cache
+        DBHelper db = new DBHelper(this);
+        List<JSONObject> cache = db.obtenerMedicamentosCache(null, false);
+        JSONArray filtradosCache = new JSONArray();
+        for (JSONObject med : cache) {
+            if (med.optString("id_farmacia").equals(farmaciaId)) filtradosCache.put(med);
+        }
+        
+        if (filtradosCache.length() > 0) {
+            mostrarMedicamentos(filtradosCache);
+            progress.setVisibility(View.GONE);
+        }
+
+        // 3. Actualización desde red
         new Thread(() -> {
             try {
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
-                    JSONObject query = new JSONObject();
-                    query.put("id_farmacia", farmaciaId);
-                    selector.put("selector", query);
+                    selector.put("selector", new JSONObject().put("id_farmacia", farmaciaId));
+                    // Optimización: Solo traer campos necesarios
+                    JSONArray fields = new JSONArray();
+                    fields.put("_id"); fields.put("_rev"); fields.put("id_farmacia");
+                    fields.put("nombre"); fields.put("precio"); fields.put("stock");
+                    fields.put("presentacion"); fields.put("promocion");
+                    fields.put("foto1"); fields.put("foto2"); fields.put("foto3");
+                    fields.put("nombre_farmacia"); fields.put("enfermedad_objetivo");
+                    selector.put("fields", fields);
 
-                    TareaServidor tarea = new TareaServidor();
-                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                    
+                    String res = new TareaServidor().execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
                     JSONObject resJson = new JSONObject(res);
+                    
                     if (resJson.has("docs")) {
                         JSONArray docs = resJson.getJSONArray("docs");
-                        DBHelper db = new DBHelper(this);
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarMedicamentoLocal(docs.getJSONObject(i));
                         }
                         
-                        // RECARGAR desde el cache local (que ya tiene el ESCUDO is_deleted)
-                        java.util.List<JSONObject> finalCache = db.obtenerMedicamentosCache(null, false);
-                        JSONArray filtrados = new JSONArray();
-                        for (JSONObject med : finalCache) {
-                            if (med.optString("id_farmacia").equals(farmaciaId)) {
-                                filtrados.put(med);
-                            }
+                        // Recargar lista final
+                        List<JSONObject> fresh = db.obtenerMedicamentosCache(null, false);
+                        JSONArray filtradosFresh = new JSONArray();
+                        for (JSONObject med : fresh) {
+                            if (med.optString("id_farmacia").equals(farmaciaId)) filtradosFresh.put(med);
                         }
-                        runOnUiThread(() -> mostrarMedicamentos(filtrados));
-                        return;
+
+                        if (filtradosFresh.length() != filtradosCache.length()) {
+                            runOnUiThread(() -> {
+                                containerMed.removeAllViews();
+                                mostrarMedicamentos(filtradosFresh);
+                            });
+                        }
                     }
                 }
-
-                // Fallback Offline: Buscar en el cache local de medicamentos
-                DBHelper db = new DBHelper(this);
-                java.util.List<JSONObject> cache = db.obtenerMedicamentosCache(null, false);
-                JSONArray filtrados = new JSONArray();
-                for (JSONObject med : cache) {
-                    if (med.optString("id_farmacia").equals(farmaciaId)) {
-                        filtrados.put(med);
-                    }
-                }
-                runOnUiThread(() -> mostrarMedicamentos(filtrados));
-
             } catch (Exception e) {
-                Log.e("FarmaciaDetalle", "Error", e);
+                Log.e("FarmaciaDetalle", "Error en red", e);
+            } finally {
+                runOnUiThread(() -> progress.setVisibility(View.GONE));
             }
         }).start();
     }

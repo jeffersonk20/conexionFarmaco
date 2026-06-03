@@ -2,6 +2,7 @@ package com.example.conexionfarmaco;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -155,14 +156,31 @@ public class LoginActivity extends AppCompatActivity {
     private void entrar(JSONObject userDoc, boolean guardarEnLocal) throws Exception {
         String id = userDoc.getString("_id");
         String nombre = userDoc.getString("nombres");
+
+        DBHelper db = new DBHelper(this);
+        // LIMPIEZA DE SEGURIDAD: Eliminar pedidos que no pertenezcan al usuario actual
+        // Esto evita ver pedidos de otros usuarios que hayan usado el mismo dispositivo
+        try {
+            db.getWritableDatabase().delete("pedidos", "cliente_correo != ?", new String[]{userDoc.optString("correo", "")});
+        } catch (Exception e) {
+            Log.e("Login", "Error limpiando pedidos ajenos", e);
+        }
+
+        // MEZCLA INTELIGENTE: Si venimos de la nube pero tenemos cambios locales pendientes
+        if (db.estaPendienteSincronizacion(id)) {
+            JSONObject local = db.obtenerUsuarioLocal(id);
+            if (local != null && !local.optString("foto", "").isEmpty()) {
+                userDoc.put("foto", local.getString("foto"));
+            }
+        }
         
+        String jsonFinal = userDoc.toString();
         getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
-                .putString("userData", userDoc.toString())
-                .putString("lastUserData", userDoc.toString())
+                .putString("userData", jsonFinal)
+                .putString("lastUserData", jsonFinal)
                 .apply();
 
         if (guardarEnLocal) {
-            DBHelper db = new DBHelper(this);
             db.administrarUsuarios("nuevo", new String[]{
                     id,
                     userDoc.optString("_rev", ""),

@@ -51,22 +51,35 @@ public class SyncWorker extends Worker {
                         if (esExitoDirecto || esRecursoInexistente) {
                             procesarExito(dbHelper, url, metodo, json, resJson);
                             dbHelper.eliminarPendiente(id_local);
-                        } else if (esConflicto && metodo.equals("DELETE")) {
-                            // ... (mismo código de reintento forzado)
-                            Log.d("SyncWorker", "Conflicto en borrado, intentando forzar...");
+                        } else if (esConflicto) {
+                            Log.d("SyncWorker", "Conflicto detectado en " + metodo + ", intentando resolver...");
                             String cleanUrl = url.contains("?") ? url.substring(0, url.indexOf("?")) : url;
                             String getRes = new TareaServidor().execute("", "GET", cleanUrl).get();
-                            JSONObject getJson = new JSONObject(getRes);
-                            if (getJson.has("_rev")) {
+                            
+                            if (getRes != null && getRes.contains("_rev")) {
+                                JSONObject getJson = new JSONObject(getRes);
                                 String currentRev = getJson.getString("_rev");
-                                String retryUrl = cleanUrl + "?rev=" + currentRev;
-                                String deleteRes = new TareaServidor().execute("", "DELETE", retryUrl).get();
-                                if (deleteRes.contains("\"ok\":true") || deleteRes.contains("200")) {
-                                    dbHelper.eliminarPendiente(id_local);
-                                    Log.d("SyncWorker", "Borrado forzado exitoso");
-                                } else { allSuccess = false; }
-                            } else if (getRes.contains("404")) {
+                                
+                                if (metodo.equals("DELETE")) {
+                                    String retryUrl = cleanUrl + "?rev=" + currentRev;
+                                    String deleteRes = new TareaServidor().execute("", "DELETE", retryUrl).get();
+                                    if (deleteRes.contains("\"ok\":true") || deleteRes.contains("200")) {
+                                        dbHelper.eliminarPendiente(id_local);
+                                    } else { allSuccess = false; }
+                                } else if (metodo.equals("PUT")) {
+                                    // Para un PUT, necesitamos inyectar el nuevo _rev en el JSON
+                                    JSONObject localObj = new JSONObject(json);
+                                    localObj.put("_rev", currentRev);
+                                    String retryRes = new TareaServidor().execute(localObj.toString(), "PUT", cleanUrl).get();
+                                    if (retryRes != null && (retryRes.contains("\"ok\":true") || retryRes.contains("201"))) {
+                                        procesarExito(dbHelper, cleanUrl, "PUT", localObj.toString(), new JSONObject(retryRes));
+                                        dbHelper.eliminarPendiente(id_local);
+                                    } else { allSuccess = false; }
+                                }
+                            } else if (getRes != null && getRes.contains("404")) {
                                 dbHelper.eliminarPendiente(id_local);
+                            } else {
+                                allSuccess = false;
                             }
                         } else {
                             Log.e("SyncWorker", "Error en tarea: " + res);

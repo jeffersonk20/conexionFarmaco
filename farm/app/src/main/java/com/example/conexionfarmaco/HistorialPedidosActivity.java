@@ -42,24 +42,39 @@ public class HistorialPedidosActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
+                DBHelper db = new DBHelper(this);
+                
+                // 1. Mostrar cache local de inmediato (VELOCIDAD)
+                List<JSONObject> cacheInicial = db.obtenerPedidosCache(userEmail);
+                runOnUiThread(() -> mostrarHistorial(new JSONArray(cacheInicial)));
+
+                // 2. Si hay internet, sincronizar en segundo plano
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
-                    selector.put("selector", new JSONObject().put("cliente_correo", userEmail));
+                    JSONObject query = new JSONObject();
+                    query.put("cliente_correo", userEmail);
+                    query.put("tipo_doc", "pedido"); // Asegurar que solo traiga pedidos
+                    selector.put("selector", query);
+
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
-                    JSONObject resJson = new JSONObject(res);
-                    if (resJson.has("docs")) {
-                        JSONArray docs = resJson.getJSONArray("docs");
-                        DBHelper db = new DBHelper(this);
-                        db.limpiarPedidosUsuario(userEmail);
-                        for (int i = 0; i < docs.length(); i++) db.guardarPedidoLocal(docs.getJSONObject(i));
-                        runOnUiThread(() -> mostrarHistorial(docs));
-                        return;
+                    
+                    if (res != null && !res.contains("Error")) {
+                        JSONObject resJson = new JSONObject(res);
+                        if (resJson.has("docs")) {
+                            JSONArray docs = resJson.getJSONArray("docs");
+                            
+                            // Guardar nuevos/actualizados sin borrar los locales pendientes
+                            for (int i = 0; i < docs.length(); i++) {
+                                db.guardarPedidoLocal(docs.getJSONObject(i));
+                            }
+                            
+                            // Recargar lista final
+                            List<JSONObject> cacheFinal = db.obtenerPedidosCache(userEmail);
+                            runOnUiThread(() -> mostrarHistorial(new JSONArray(cacheFinal)));
+                        }
                     }
                 }
-                // Cache si offline
-                List<JSONObject> cache = new DBHelper(this).obtenerPedidosCache(userEmail);
-                runOnUiThread(() -> mostrarHistorial(new JSONArray(cache)));
             } catch (Exception e) {
                 Log.e("Historial", "Error carga", e);
             }
@@ -68,15 +83,27 @@ public class HistorialPedidosActivity extends AppCompatActivity {
 
     private void mostrarHistorial(JSONArray docs) {
         containerHistorial.removeAllViews();
+        if (docs.length() == 0) return;
+
+        // Carga progresiva para no congelar la UI
+        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
         for (int i = 0; i < docs.length(); i++) {
-            try {
-                agregarCardHistorial(docs.getJSONObject(i));
-            } catch (Exception e) {}
+            final int index = i;
+            handler.postDelayed(() -> {
+                try {
+                    if (!isFinishing()) {
+                        agregarCardHistorial(docs.getJSONObject(index));
+                    }
+                } catch (Exception e) {}
+            }, (long) i * 50); // 50ms de retraso entre cada card
         }
     }
 
 
     private void agregarCardHistorial(JSONObject pedido) throws Exception {
+        // Doble validación de seguridad local
+        if (!pedido.optString("cliente_correo", "").equalsIgnoreCase(userEmail)) return;
+
         View card = getLayoutInflater().inflate(R.layout.item_historial_cliente, containerHistorial, false);
         
         TextView tvFecha = card.findViewById(R.id.tvHistFecha);

@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -49,14 +50,23 @@ public class ListaChatClientesActivity extends AppCompatActivity {
     }
 
     private void cargarConversaciones() {
-        pb.setVisibility(View.VISIBLE);
+        if (listaConversaciones.isEmpty()) pb.setVisibility(View.VISIBLE);
         tvSinChats.setVisibility(View.GONE);
         
         new Thread(() -> {
             try {
                 DBHelper db = new DBHelper(this);
                 
-                // Intentar sincronizar del servidor primero para tener los últimos mensajes de clientes
+                // 1. Mostrar cache local de inmediato para velocidad
+                List<JSONObject> chatsIniciales = db.obtenerConversacionesFarmacia(farmaciaId);
+                runOnUiThread(() -> {
+                    listaConversaciones.clear();
+                    listaConversaciones.addAll(chatsIniciales);
+                    adapter.notifyDataSetChanged();
+                    if (!chatsIniciales.isEmpty()) pb.setVisibility(View.GONE);
+                });
+
+                // 2. Sincronizar en segundo plano si hay internet
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
                     JSONObject query = new JSONObject();
@@ -66,24 +76,32 @@ public class ListaChatClientesActivity extends AppCompatActivity {
 
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_mto + "/_find").get();
-                    JSONObject resJson = new JSONObject(res);
-                    if (resJson.has("docs")) {
-                        org.json.JSONArray docs = resJson.getJSONArray("docs");
-                        for (int i = 0; i < docs.length(); i++) {
-                            db.guardarMensajeLocal(docs.getJSONObject(i));
+                    if (res != null && !res.contains("Error")) {
+                        JSONObject resJson = new JSONObject(res);
+                        if (resJson.has("docs")) {
+                            org.json.JSONArray docs = resJson.getJSONArray("docs");
+                            for (int i = 0; i < docs.length(); i++) {
+                                db.guardarMensajeLocal(docs.getJSONObject(i));
+                            }
+                            
+                            // 3. Recargar tras sincronizar si hubo cambios
+                            List<JSONObject> chatsFinales = db.obtenerConversacionesFarmacia(farmaciaId);
+                            runOnUiThread(() -> {
+                                pb.setVisibility(View.GONE);
+                                listaConversaciones.clear();
+                                listaConversaciones.addAll(chatsFinales);
+                                adapter.notifyDataSetChanged();
+                                if (chatsFinales.isEmpty()) tvSinChats.setVisibility(View.VISIBLE);
+                                else tvSinChats.setVisibility(View.GONE);
+                            });
                         }
                     }
+                } else {
+                    runOnUiThread(() -> {
+                        pb.setVisibility(View.GONE);
+                        if (listaConversaciones.isEmpty()) tvSinChats.setVisibility(View.VISIBLE);
+                    });
                 }
-
-                // Cargar desde cache agrupado
-                List<JSONObject> chats = db.obtenerConversacionesFarmacia(farmaciaId);
-                runOnUiThread(() -> {
-                    pb.setVisibility(View.GONE);
-                    listaConversaciones.clear();
-                    listaConversaciones.addAll(chats);
-                    adapter.notifyDataSetChanged();
-                    if (chats.isEmpty()) tvSinChats.setVisibility(View.VISIBLE);
-                });
 
             } catch (Exception e) {
                 Log.e("ChatList", "Error", e);
@@ -109,6 +127,13 @@ public class ListaChatClientesActivity extends AppCompatActivity {
                 JSONObject obj = items.get(position);
                 holder.t1.setText(obj.optString("nombre_cliente", "Cliente " + (position + 1)));
                 holder.t2.setText(obj.optString("ultimo_mensaje", ""));
+
+                String foto = obj.optString("cliente_foto", "");
+                if (!foto.isEmpty()) {
+                    Utilidades.cargarImagenBase64(foto, holder.ivUser);
+                } else {
+                    holder.ivUser.setImageResource(android.R.drawable.ic_menu_myplaces);
+                }
                 
                 int noLeidos = obj.optInt("no_leidos", 0);
                 if (noLeidos > 0) {
@@ -127,6 +152,7 @@ public class ListaChatClientesActivity extends AppCompatActivity {
                     intent.putExtra("id_farmacia", farmaciaId);
                     intent.putExtra("id_usuario", obj.optString("id_usuario"));
                     intent.putExtra("nombre_receptor", obj.optString("nombre_cliente"));
+                    intent.putExtra("foto_receptor", obj.optString("cliente_foto"));
                     startActivity(intent);
                 });
             } catch (Exception e) {}
@@ -136,11 +162,13 @@ public class ListaChatClientesActivity extends AppCompatActivity {
 
         class VH extends RecyclerView.ViewHolder {
             TextView t1, t2, badge;
+            ImageView ivUser;
             VH(View v) {
                 super(v);
                 t1 = v.findViewById(R.id.tvChatNombre);
                 t2 = v.findViewById(R.id.tvChatUltimoMsg);
                 badge = v.findViewById(R.id.tvChatBadge);
+                ivUser = v.findViewById(R.id.ivUserIcon);
             }
         }
     }

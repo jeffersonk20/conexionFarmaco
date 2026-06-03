@@ -30,8 +30,10 @@ import org.json.JSONObject;
 import java.util.List;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import android.util.Base64;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -121,47 +123,61 @@ public class PerfilActivity extends AppCompatActivity {
             new Thread(() -> {
                 try {
                     DBHelper db = new DBHelper(this);
-                    List<JSONObject> pedidos;
+                    
+                    // 1. Mostrar cache local de inmediato
+                    List<JSONObject> cacheInicial = db.obtenerPedidosCache(userEmail);
+                    actualizarListaPerfil(cacheInicial);
 
+                    // 2. Sincronizar si hay internet
                     if (Utilidades.hayInternet(this)) {
                         JSONObject selector = new JSONObject();
                         selector.put("selector", new JSONObject().put("cliente_correo", userEmail));
                         
                         TareaServidor tarea = new TareaServidor();
                         String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
-                        JSONObject resJson = new JSONObject(res);
-                        
-                        if (resJson.has("docs")) {
-                            JSONArray docs = resJson.getJSONArray("docs");
-                            db.limpiarPedidosUsuario(userEmail);
-                            for (int i = 0; i < docs.length(); i++) {
-                                db.guardarPedidoLocal(docs.getJSONObject(i));
+                        if (res != null && !res.contains("Error")) {
+                            JSONObject resJson = new JSONObject(res);
+                            if (resJson.has("docs")) {
+                                JSONArray docs = resJson.getJSONArray("docs");
+                                for (int i = 0; i < docs.length(); i++) {
+                                    db.guardarPedidoLocal(docs.getJSONObject(i));
+                                }
+                                
+                                // 3. Recargar lista final
+                                List<JSONObject> cacheFinal = db.obtenerPedidosCache(userEmail);
+                                actualizarListaPerfil(cacheFinal);
                             }
                         }
                     }
-
-                    // Cargar de la base de datos local (que ya incluye lo que acabamos de bajar o lo que estaba offline)
-                    pedidos = db.obtenerPedidosCache(userEmail);
-
-                    runOnUiThread(() -> {
-                        containerHistorial.removeAllViews();
-                        if (pedidos.isEmpty()) {
-                            tvSinCompras.setVisibility(View.VISIBLE);
-                            tvSinCompras.setText("No tienes compras registradas");
-                        } else {
-                            tvSinCompras.setVisibility(View.GONE);
-                            for (JSONObject pedido : pedidos) {
-                                agregarItemHistorialResumido(pedido);
-                            }
-                        }
-                    });
-
                 } catch (Exception e) {
                     Log.e("Perfil", "Error historial", e);
                 }
             }).start();
-
         } catch (Exception e) {}
+    }
+
+    private void actualizarListaPerfil(List<JSONObject> pedidos) {
+        runOnUiThread(() -> {
+            containerHistorial.removeAllViews();
+            if (pedidos.isEmpty()) {
+                tvSinCompras.setVisibility(View.VISIBLE);
+                tvSinCompras.setText("No tienes compras registradas");
+            } else {
+                tvSinCompras.setVisibility(View.GONE);
+                
+                // Carga progresiva (solo los últimos 10 para el resumen del perfil)
+                android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+                int limite = Math.min(pedidos.size(), 10);
+                for (int i = 0; i < limite; i++) {
+                    final int index = i;
+                    handler.postDelayed(() -> {
+                        if (!isFinishing()) {
+                            agregarItemHistorialResumido(pedidos.get(index));
+                        }
+                    }, (long) i * 50);
+                }
+            }
+        });
     }
 
     private void agregarItemHistorialResumido(JSONObject pedido) {
@@ -354,37 +370,37 @@ public class PerfilActivity extends AppCompatActivity {
             } catch (Exception e) {}
         }
 
-        if (Utilidades.hayInternet(this)) {
+        if (Utilidades.hayInternet(this) && userData != null) {
             new Thread(() -> {
                 try {
-                    String correo = userData != null ? userData.optString("correo", "") : "";
-                    if (correo.isEmpty()) return;
+                    String id = userData.optString("_id", "");
+                    if (id.isEmpty()) return;
 
-                    JSONObject selector = new JSONObject();
-                    JSONObject query = new JSONObject();
-                    query.put("correo", correo);
-                    selector.put("selector", query);
-                    
+                    // CAMBIO CRÍTICO: Usar GET directo por ID en lugar de _find para evitar datos obsoletos
+                    String url = Utilidades.url_mto + "/" + id;
                     TareaServidor tarea = new TareaServidor();
-                    String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find).get();
+                    String respuesta = tarea.execute("", "GET", url).get();
                     
-                    JSONObject resJson = new JSONObject(respuesta);
-                    if (resJson.has("docs")) {
-                        JSONArray docs = resJson.getJSONArray("docs");
-                        if (docs.length() > 0) {
-                            userData = docs.getJSONObject(0);
+                    if (respuesta != null && !respuesta.contains("Error")) {
+                        JSONObject docServidor = new JSONObject(respuesta);
+                        
+                        DBHelper db = new DBHelper(this);
+                        // IMPORTANTE: Solo actualizar localmente si NO hay cambios pendientes de subir
+                        if (!db.estaPendienteSincronizacion(id)) {
+                            userData = docServidor;
                             String actualizado = userData.toString();
-                            prefs.edit().putString("userData", actualizado).apply();
                             
-                            // Sincronizar también con la DB local lo que venga de la nube
-                            DBHelper db = new DBHelper(this);
-                            db.administrarUsuarios("modificar", new String[]{
-                                    userData.getString("_id"),
+                            // Actualizar ambos campos de sesión
+                            prefs.edit().putString("userData", actualizado)
+                                       .putString("lastUserData", actualizado).apply();
+                            
+                            db.administrarUsuarios("nuevo", new String[]{
+                                    id,
                                     userData.optString("_rev", ""),
-                                    userData.getString("nombres"),
-                                    userData.getString("apellidos"),
-                                    userData.getString("telefono"),
-                                    userData.getString("correo"),
+                                    userData.optString("nombres", ""),
+                                    userData.optString("apellidos", ""),
+                                    userData.optString("telefono", ""),
+                                    userData.optString("correo", ""),
                                     userData.optString("clave", ""),
                                     userData.optString("direccion", ""),
                                     userData.optString("alergias", ""),
@@ -397,7 +413,7 @@ public class PerfilActivity extends AppCompatActivity {
                         }
                     }
                 } catch (Exception e) {
-                    Log.e("Perfil", "Error red", e);
+                    Log.e("Perfil", "Error red segura", e);
                 }
             }).start();
         }
@@ -482,7 +498,17 @@ public class PerfilActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
             if (requestCode == REQUEST_IMAGE_CAPTURE) {
-                // urlFoto ya tiene la ruta del archivo creado
+                // Corregir orientación antes de mostrar y subir
+                Bitmap bmp = Utilidades.obtenerBitmapRotado(urlFoto);
+                if (bmp != null) {
+                    try {
+                        OutputStream os = new FileOutputStream(urlFoto);
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 90, os);
+                        os.close();
+                    } catch (Exception e) {
+                        Log.e("Perfil", "Error corrigiendo rotacion camara", e);
+                    }
+                }
                 subirFoto();
                 Utilidades.cargarImagenBase64(urlFoto, imgPerfil);
             } else if (requestCode == REQUEST_IMAGE_PICK && data != null) {
@@ -496,19 +522,16 @@ public class PerfilActivity extends AppCompatActivity {
 
     private void guardarImagenLocalmente(Uri uri) {
         try {
-            InputStream inputStream = getContentResolver().openInputStream(uri);
+            Bitmap bitmap = Utilidades.obtenerBitmapRotado(this, uri);
+            if (bitmap == null) return;
+
             File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
             File file = new File(storageDir, "PERFIL_" + timeStamp + ".jpg");
             
             OutputStream outputStream = new FileOutputStream(file);
-            byte[] buffer = new byte[1024];
-            int length;
-            while ((length = inputStream.read(buffer)) > 0) {
-                outputStream.write(buffer, 0, length);
-            }
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
             outputStream.close();
-            inputStream.close();
             
             urlFoto = file.getAbsolutePath();
             subirFoto();
@@ -519,15 +542,70 @@ public class PerfilActivity extends AppCompatActivity {
     }
 
     private void subirFoto() {
-        if (userData == null) return;
+        if (userData == null || urlFoto.isEmpty()) return;
         
+        // Mostrar un pequeño aviso de carga
+        runOnUiThread(() -> Toast.makeText(this, "Actualizando foto...", Toast.LENGTH_SHORT).show());
+
         new Thread(() -> {
             try {
-                userData.put("foto", urlFoto);
+                // 1. Cargar el bitmap y corregir orientación si es necesario
+                Bitmap bmp = Utilidades.obtenerBitmapRotado(urlFoto);
+                if (bmp != null) {
+                    // 2. Redimensionar para optimizar (máximo 500px)
+                    int maxSize = 500;
+                    int width = bmp.getWidth();
+                    int height = bmp.getHeight();
+                    if (width > maxSize || height > maxSize) {
+                        float ratio = (float) width / (float) height;
+                        if (ratio > 1) {
+                            width = maxSize;
+                            height = (int) (maxSize / ratio);
+                        } else {
+                            height = maxSize;
+                            width = (int) (maxSize * ratio);
+                        }
+                        bmp = Bitmap.createScaledBitmap(bmp, width, height, true);
+                    }
+
+                    // 3. Convertir a Base64
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+                    byte[] bytes = baos.toByteArray();
+                    String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                    
+                    // IMPORTANTE: Guardamos el Base64 en el documento
+                    userData.put("foto", base64);
+                    
+                    // Actualizar UI local de inmediato con la imagen procesada para que se vea bien
+                    final Bitmap finalBmp = bmp;
+                    runOnUiThread(() -> {
+                        imgPerfil.setImageBitmap(finalBmp);
+                        // También actualizamos SharedPreferences de inmediato
+                        getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                                .putString("userData", userData.toString()).apply();
+                    });
+                }
+
+                // 4. Actualizar UI y SharedPreferences de inmediato (LOCAL FIRST)
+                final Bitmap finalBmp = bmp;
+                runOnUiThread(() -> {
+                    imgPerfil.setImageBitmap(finalBmp);
+                    try {
+                        String jsonActualizado = userData.toString();
+                        getSharedPreferences("UserPrefs", MODE_PRIVATE).edit()
+                                .putString("userData", jsonActualizado)
+                                .putString("lastUserData", jsonActualizado) // También para huella
+                                .apply();
+                    } catch (Exception e) {}
+                });
+
+                // 5. Sincronizar con DB local y Nube
                 actualizarDocumentoEnCouch();
-                runOnUiThread(() -> Toast.makeText(this, "Foto de perfil actualizada", Toast.LENGTH_SHORT).show());
+                
             } catch (Exception e) {
                 Log.e("Perfil", "Error subida", e);
+                runOnUiThread(() -> Toast.makeText(this, "Error al procesar imagen", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }

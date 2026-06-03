@@ -164,9 +164,51 @@ public class AdminHomeActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        
+        // Actualizar datos del perfil (nombre y logo) en caso de que hayan cambiado
+        SharedPreferences prefs = getSharedPreferences("AdminPrefs", MODE_PRIVATE);
+        tvNombreFarmacia.setText(prefs.getString("farmaciaNombre", "Mi Farmacia"));
+        String fotoBase64 = prefs.getString("farmaciaFoto", "");
+        if (!fotoBase64.isEmpty()) {
+            Utilidades.cargarImagenBase64(fotoBase64, ivLogo);
+        }
+
         Utilidades.sincronizar(this);
         cargarMedicamentos();
         actualizarDashboard();
+        cargarPerfilBackground();
+    }
+
+    private void cargarPerfilBackground() {
+        if (farmaciaId.isEmpty() || !Utilidades.hayInternet(this)) return;
+
+        new Thread(() -> {
+            try {
+                // Descargar el perfil completo (incluyendo foto) sin bloquear la UI
+                String url = Utilidades.url_farmacias + "/" + farmaciaId;
+                TareaServidor tarea = new TareaServidor();
+                String res = tarea.execute("", "GET", url).get();
+
+                if (res != null && !res.contains("Error")) {
+                    JSONObject farmDoc = new JSONObject(res);
+                    String foto = farmDoc.optString("foto", "");
+                    
+                    if (!foto.isEmpty()) {
+                        // Guardar en SharedPreferences y DB local
+                        SharedPreferences prefs = getSharedPreferences("AdminPrefs", MODE_PRIVATE);
+                        prefs.edit().putString("farmaciaFoto", foto).apply();
+                        
+                        DBHelper db = new DBHelper(this);
+                        db.guardarFarmaciaCache(farmDoc, false);
+
+                        // Actualizar logo en la pantalla principal
+                        runOnUiThread(() -> Utilidades.cargarImagenBase64(foto, ivLogo));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("AdminHome", "Error cargando perfil background", e);
+            }
+        }).start();
     }
 
     private void cargarMedicamentos() {

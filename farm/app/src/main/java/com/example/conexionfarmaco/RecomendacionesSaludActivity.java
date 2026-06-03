@@ -5,6 +5,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Button;
 import android.widget.Toast;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 public class RecomendacionesSaludActivity extends AppCompatActivity {
     private LinearLayout container;
     private TextView tvTitulo, tvDesc;
+    private ProgressBar progress;
     private String enfermedad = "";
 
     @Override
@@ -33,6 +35,7 @@ public class RecomendacionesSaludActivity extends AppCompatActivity {
         container = findViewById(R.id.containerListaRecomendados);
         tvTitulo = findViewById(R.id.tvTituloEnfermedadDetalle);
         tvDesc = findViewById(R.id.tvDescripcionEnfermedadDetalle);
+        progress = findViewById(R.id.progressRecomendaciones);
 
         cargarDatosUsuario();
         cargarRecomendaciones();
@@ -81,61 +84,75 @@ public class RecomendacionesSaludActivity extends AppCompatActivity {
     }
 
     private void cargarRecomendaciones() {
+        // 1. Mostrar carga y limpiar contenedor
+        progress.setVisibility(View.VISIBLE);
+        container.removeAllViews();
+
+        // 2. Cargar de cache INMEDIATAMENTE para respuesta instantánea
+        DBHelper db = new DBHelper(this);
+        List<JSONObject> cache = db.obtenerMedicamentosCache(enfermedad, false);
+        if (!cache.isEmpty()) {
+            mostrarMedicamentos(cache);
+            // Si hay cache, ocultamos el progress pronto para dar sensación de rapidez
+            progress.setVisibility(View.GONE);
+        }
+
+        // 3. Actualizar desde el servidor en segundo plano
         new Thread(() -> {
             try {
-                JSONArray docs = null;
-
                 if (Utilidades.hayInternet(this)) {
-                    try {
-                        JSONObject selector = new JSONObject();
-                        // Ahora buscamos exactamente por el campo enfermedad_objetivo
-                        selector.put("selector", new JSONObject().put("enfermedad_objetivo", enfermedad));
+                    JSONObject selector = new JSONObject();
+                    selector.put("selector", new JSONObject().put("enfermedad_objetivo", enfermedad));
 
-                        TareaServidor tarea = new TareaServidor();
-                        String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
-                        JSONObject resJson = new JSONObject(res);
-                        if (resJson.has("docs")) {
-                            docs = resJson.getJSONArray("docs");
-                            // Guardar en cache local
-                            DBHelper db = new DBHelper(this);
-                            for (int i = 0; i < docs.length(); i++) {
-                                db.guardarMedicamentoLocal(docs.getJSONObject(i));
-                            }
+                    TareaServidor tarea = new TareaServidor();
+                    // Ejecutar sin .get() para no bloquear este hilo (aunque ya es un Thread)
+                    // pero usaremos una lógica más limpia
+                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_medicamentos).get();
+                    JSONObject resJson = new JSONObject(res);
+                    
+                    if (resJson.has("docs")) {
+                        JSONArray docs = resJson.getJSONArray("docs");
+                        List<JSONObject> freshList = new ArrayList<>();
+                        for (int i = 0; i < docs.length(); i++) {
+                            JSONObject med = docs.getJSONObject(i);
+                            db.guardarMedicamentoLocal(med);
+                            freshList.add(med);
                         }
-                    } catch (Exception e) {
-                        Log.e("RecSalud", "Error server, usando cache", e);
-                    }
-                }
 
-                if (docs == null) {
-                    // Cargar de cache local filtrando por la enfermedad exacta
-                    DBHelper db = new DBHelper(this);
-                    List<JSONObject> cache = db.obtenerMedicamentosCache(enfermedad, false);
-                    docs = new JSONArray(cache);
-                }
-
-                final JSONArray finalDocs = docs;
-                runOnUiThread(() -> {
-                    container.removeAllViews();
-                    if (finalDocs != null) {
-                        for (int i = 0; i < finalDocs.length(); i++) {
-                            try {
-                                container.addView(crearCardMedicamento(finalDocs.getJSONObject(i)));
-                            } catch (Exception e) {}
+                        // Si la lista fresca es diferente a la de cache, actualizar UI
+                        if (freshList.size() != cache.size()) {
+                            runOnUiThread(() -> {
+                                container.removeAllViews();
+                                mostrarMedicamentos(freshList);
+                            });
                         }
                     }
-                    if (finalDocs == null || finalDocs.length() == 0) {
-                        TextView empty = new TextView(this);
-                        empty.setText("No hay medicamentos específicos recomendados por la farmacia para " + enfermedad + " por el momento.");
-                        empty.setPadding(20, 50, 20, 20);
-                        empty.setGravity(android.view.Gravity.CENTER);
-                        container.addView(empty);
-                    }
-                });
+                }
             } catch (Exception e) {
-                Log.e("RecSalud", "Error cargando recomendaciones", e);
+                Log.e("RecSalud", "Error en actualización de fondo", e);
+            } finally {
+                runOnUiThread(() -> progress.setVisibility(View.GONE));
             }
         }).start();
+    }
+
+    private void mostrarMedicamentos(List<JSONObject> lista) {
+        if (lista == null || lista.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No hay medicamentos específicos recomendados para " + enfermedad + " por el momento.");
+            empty.setPadding(20, 50, 20, 20);
+            empty.setGravity(android.view.Gravity.CENTER);
+            container.addView(empty);
+            return;
+        }
+
+        for (JSONObject med : lista) {
+            try {
+                container.addView(crearCardMedicamento(med));
+            } catch (Exception e) {
+                Log.e("RecSalud", "Error al crear card", e);
+            }
+        }
     }
 
     private View crearCardMedicamento(JSONObject med) throws Exception {

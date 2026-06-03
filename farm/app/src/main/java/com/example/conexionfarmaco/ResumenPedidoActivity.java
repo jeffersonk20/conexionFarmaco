@@ -15,6 +15,8 @@ public class ResumenPedidoActivity extends AppCompatActivity {
     private String metodoPago = "tarjeta";
     private TextView tvSubtotal, tvEnvio, tvTotal;
     private double totalCalculado = 0;
+    private boolean procesando = false;
+    private String orderId = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,14 +47,19 @@ public class ResumenPedidoActivity extends AppCompatActivity {
         findViewById(R.id.btnResCancelar).setOnClickListener(v -> finish());
 
         findViewById(R.id.btnFinalizarPedido).setOnClickListener(v -> {
+            if (procesando) return;
+            
+            if (orderId == null) orderId = Utilidades.generarId();
+
             if ("tarjeta".equals(metodoPago)) {
                 // Si el método es tarjeta, solo abrimos la pasarela.
                 // NO guardamos el pedido todavía.
-                String referenciaPedido = Utilidades.generarId();
-                Utilidades.pagarConWompi(this, totalCalculado, referenciaPedido);
+                Utilidades.pagarConWompi(this, totalCalculado, orderId);
                 
                 Toast.makeText(this, "Redirigiendo a pago seguro...", Toast.LENGTH_SHORT).show();
             } else {
+                procesando = true;
+                v.setEnabled(false);
                 guardarPedido();
             }
         });
@@ -81,10 +88,11 @@ public class ResumenPedidoActivity extends AppCompatActivity {
             boolean esExito = "true".equalsIgnoreCase(aprobado) || 
                              (idTransaccion != null && !urlCompleta.contains("false"));
 
-            if (esExito) {
+            if (esExito && !procesando) {
+                procesando = true;
                 Toast.makeText(this, "¡Pago Confirmado! Registrando su pedido...", Toast.LENGTH_LONG).show();
                 guardarPedido();
-            } else {
+            } else if (!esExito) {
                 Log.w("Wompi", "El pago no fue aprobado. Parámetros: " + urlCompleta);
                 Toast.makeText(this, "El pago no se completó. Por favor intente de nuevo.", Toast.LENGTH_LONG).show();
             }
@@ -135,8 +143,10 @@ public class ResumenPedidoActivity extends AppCompatActivity {
                 nombreFact = userName; // Fallback al nombre del usuario si no hay nombre de facturación
             }
 
+            if (orderId == null) orderId = Utilidades.generarId();
+
             JSONObject pedido = new JSONObject();
-            pedido.put("_id", Utilidades.generarId());
+            pedido.put("_id", orderId);
             
             // Datos de facturación/envío
             pedido.put("cliente_nombre", nombreFact);
@@ -165,31 +175,30 @@ public class ResumenPedidoActivity extends AppCompatActivity {
             pedido.put("tipo_doc", "pedido"); // Para facilitar filtros
 
 
+            // 1. GUARDADO LOCAL INMEDIATO (VELOCIDAD TOTAL)
+            DBHelper dbHelper = new DBHelper(this);
+            dbHelper.guardarPedidoLocal(pedido);
+
+            // 2. Notificar éxito de inmediato y redirigir (Experiencia fluida)
+            finalizarExitosamente(pedido, !Utilidades.hayInternet(this));
+
+            // 3. Sincronizar en segundo plano sin bloquear al usuario
             new Thread(() -> {
                 try {
-                    DBHelper dbHelper = new DBHelper(this);
-                    // GUARDADO LOCAL SIEMPRE (para que aparezca en historial de inmediato)
-                    dbHelper.guardarPedidoLocal(pedido);
-
                     if (Utilidades.hayInternet(this)) {
                         TareaServidor tarea = new TareaServidor();
                         String res = tarea.execute(pedido.toString(), "POST", Utilidades.url_pedidos).get();
-                        JSONObject resJson = new JSONObject(res);
-
-                        if (resJson.optBoolean("ok", false)) {
-                            finalizarExitosamente(pedido, false);
-                            return;
+                        
+                        if (res == null || !res.contains("\"ok\":true")) {
+                            // Si falló el envío directo, encolar para SyncWorker
+                            dbHelper.agregarPendiente(Utilidades.url_pedidos, "POST", pedido.toString(), "couchdb");
                         }
+                    } else {
+                        dbHelper.agregarPendiente(Utilidades.url_pedidos, "POST", pedido.toString(), "couchdb");
                     }
-
-                    // Si no hay internet o falló el server, ya está en pedidos local,
-                    // pero necesitamos que se sincronice luego
-                    dbHelper.agregarPendiente(Utilidades.url_pedidos, "POST", pedido.toString(), "couchdb");
                     Utilidades.sincronizar(this);
-                    finalizarExitosamente(pedido, true);
-
                 } catch (Exception e) {
-                    Log.e("ResumenPedido", "Error al procesar", e);
+                    Log.e("ResumenPedido", "Error sync background", e);
                 }
             }).start();
 

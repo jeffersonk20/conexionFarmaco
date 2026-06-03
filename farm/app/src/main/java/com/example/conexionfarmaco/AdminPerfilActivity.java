@@ -107,17 +107,18 @@ public class AdminPerfilActivity extends AppCompatActivity {
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             try {
                 Uri uri = data.getData();
-                InputStream is = getContentResolver().openInputStream(uri);
-                Bitmap bitmap = BitmapFactory.decodeStream(is);
+                Bitmap bitmap = Utilidades.obtenerBitmapRotado(this, uri);
                 
-                // Redimensionar para optimizar
-                bitmap = redimensionarBitmap(bitmap, 500);
-                imgLogo.setImageBitmap(bitmap);
-                
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
-                byte[] bytes = baos.toByteArray();
-                fotoBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                if (bitmap != null) {
+                    // Redimensionar para optimizar
+                    bitmap = redimensionarBitmap(bitmap, 500);
+                    imgLogo.setImageBitmap(bitmap);
+                    
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+                    byte[] bytes = baos.toByteArray();
+                    fotoBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                }
             } catch (Exception e) {
                 Toast.makeText(this, "Error al procesar imagen", Toast.LENGTH_SHORT).show();
             }
@@ -150,7 +151,14 @@ public class AdminPerfilActivity extends AppCompatActivity {
                 return;
             }
 
-            if (farmaciaActual == null) farmaciaActual = new JSONObject();
+            DBHelper db = new DBHelper(this);
+            if (farmaciaActual == null) {
+                farmaciaActual = db.obtenerFarmaciaLocal(farmaciaId);
+                if (farmaciaActual == null) {
+                    farmaciaActual = new JSONObject();
+                    farmaciaActual.put("_id", farmaciaId);
+                }
+            }
             
             farmaciaActual.put("empresa", nom);
             farmaciaActual.put("direccion", dir);
@@ -162,19 +170,8 @@ public class AdminPerfilActivity extends AppCompatActivity {
                 farmaciaActual.put("foto", fotoBase64);
             }
 
-            DBHelper db = new DBHelper(this);
-            db.administrarFarmacias("modificar", new String[]{
-                    farmaciaId,
-                    farmaciaActual.optString("_rev", ""),
-                    nom,
-                    dir,
-                    tel,
-                    farmaciaActual.optString("correo", ""),
-                    farmaciaActual.optString("clave", ""),
-                    farmaciaActual.optString("foto", ""),
-                    des,
-                    farmaciaActual.optBoolean("chat_habilitado", false) ? "1" : "0"
-            });
+            // Usamos guardarFarmaciaCache con forzar=true porque el usuario está editando activamente
+            db.guardarFarmaciaCache(farmaciaActual, true);
 
             // Sincronizar con la nube
             String urlUpdate = Utilidades.url_farmacias + "/" + farmaciaId;
@@ -183,6 +180,12 @@ public class AdminPerfilActivity extends AppCompatActivity {
 
             Toast.makeText(this, "Perfil actualizado localmente. Sincronizando...", Toast.LENGTH_SHORT).show();
             tvNombreHeader.setText(nom);
+
+            // ACTUALIZAR SharedPreferences para que el chat use los nuevos datos
+            SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
+            editor.putString("farmaciaNombre", nom);
+            editor.putString("farmaciaFoto", farmaciaActual.optString("foto", ""));
+            editor.apply();
 
         } catch (Exception e) {
             Toast.makeText(this, "Error al guardar: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -201,26 +204,26 @@ public class AdminPerfilActivity extends AppCompatActivity {
         if (Utilidades.hayInternet(this)) {
             new Thread(() -> {
                 try {
-                    JSONObject selector = new JSONObject();
-                    selector.put("selector", new JSONObject().put("_id", farmaciaId));
+                    // Fetch by ID directly instead of using _find to avoid index delay
+                    String url = Utilidades.url_farmacias + "/" + farmaciaId;
                     TareaServidor tarea = new TareaServidor();
-                    String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
-                    JSONObject resJson = new JSONObject(res);
-                    if (resJson.has("docs") && resJson.getJSONArray("docs").length() > 0) {
-                        farmaciaActual = resJson.getJSONArray("docs").getJSONObject(0);
-                        db.administrarFarmacias("modificar", new String[]{
-                                farmaciaId,
-                                farmaciaActual.optString("_rev", ""),
-                                farmaciaActual.getString("empresa"),
-                                farmaciaActual.optString("direccion", ""),
-                                farmaciaActual.optString("telefono", ""),
-                                farmaciaActual.optString("correo", ""),
-                                farmaciaActual.optString("clave", ""),
-                                farmaciaActual.optString("foto", ""),
-                                farmaciaActual.optString("descripcion", ""),
-                                farmaciaActual.optBoolean("chat_habilitado", false) ? "1" : "0"
-                        });
-                        runOnUiThread(() -> actualizarUI(farmaciaActual));
+                    String res = tarea.execute("", "GET", url).get();
+                    
+                    if (res != null && !res.contains("Error")) {
+                        JSONObject docServidor = new JSONObject(res);
+                        
+                        // Solo actualizar localmente si no hay cambios pendientes de subir
+                        if (!db.estaPendienteSincronizacion(farmaciaId)) {
+                            // IMPORTANTE: El servidor puede no devolver correo/clave, preservamos los locales
+                            JSONObject local = db.obtenerFarmaciaLocal(farmaciaId);
+                            if (local != null) {
+                                if (!docServidor.has("correo")) docServidor.put("correo", local.optString("correo"));
+                                if (!docServidor.has("clave")) docServidor.put("clave", local.optString("clave"));
+                            }
+                            farmaciaActual = docServidor;
+                            db.guardarFarmaciaCache(farmaciaActual, false);
+                            runOnUiThread(() -> actualizarUI(farmaciaActual));
+                        }
                     }
                 } catch (Exception e) {
                     Log.e("AdminPerfil", "Error red", e);

@@ -75,12 +75,20 @@ public class AdminLoginActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
+                JSONObject selector = new JSONObject();
                 JSONObject query = new JSONObject();
                 query.put("correo", cor);
                 query.put("clave", cla);
-                
-                JSONObject selector = new JSONObject();
                 selector.put("selector", query);
+                
+                // Optimización Extrema: NO pedir la foto en el login para que sea instantáneo
+                JSONArray fields = new JSONArray();
+                fields.put("_id"); fields.put("_rev"); fields.put("empresa");
+                fields.put("direccion"); fields.put("telefono"); fields.put("correo");
+                fields.put("descripcion"); fields.put("chat_habilitado");
+                // La foto se cargará en segundo plano una vez dentro de la app
+                selector.put("fields", fields);
+                selector.put("limit", 1);
 
                 TareaServidor tarea = new TareaServidor();
                 String respuesta = tarea.execute(selector.toString(), "POST", Utilidades.url_find_farmacias).get();
@@ -111,6 +119,7 @@ public class AdminLoginActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = getSharedPreferences("AdminPrefs", MODE_PRIVATE).edit();
         editor.putString("farmaciaId", id);
         editor.putString("farmaciaNombre", nombre);
+        editor.putString("farmaciaFoto", farmDoc.optString("foto", ""));
         editor.putBoolean("chatHabilitado", farmDoc.optBoolean("chat_habilitado", false));
         editor.apply();
 

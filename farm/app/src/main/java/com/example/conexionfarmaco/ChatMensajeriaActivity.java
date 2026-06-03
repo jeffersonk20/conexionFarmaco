@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,7 +19,7 @@ import java.util.Locale;
 
 public class ChatMensajeriaActivity extends AppCompatActivity {
 
-    private String idFarmacia, idUsuario, nombreReceptor, idPropio, nombrePropio, clienteNombreCompleto;
+    private    String idFarmacia, idUsuario, nombreReceptor, idPropio, nombrePropio, clienteNombreCompleto, fotoPropia, clienteFoto, farmaciaFoto;
     private boolean esAdmin = false;
     private RecyclerView rvMensajes;
     private MensajeriaAdapter adapter;
@@ -39,19 +40,24 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
         btnEnviar = findViewById(R.id.btnEnviarChat);
         pb = findViewById(R.id.pbChat);
         TextView tvTitulo = findViewById(R.id.tvNombreReceptor);
+        ImageView ivFoto = findViewById(R.id.ivFotoReceptor);
 
         idFarmacia = getIntent().getStringExtra("id_farmacia");
         idUsuario = getIntent().getStringExtra("id_usuario");
         nombreReceptor = getIntent().getStringExtra("nombre_receptor");
-        
+        String fotoReceptor = getIntent().getStringExtra("foto_receptor");
+
         // Determinar si quien abre el chat es Admin (Farmacia) o Cliente
         String adminId = getSharedPreferences("AdminPrefs", MODE_PRIVATE).getString("farmaciaId", "");
         if (!adminId.isEmpty() && adminId.equals(idFarmacia)) {
             esAdmin = true;
             idPropio = idFarmacia;
             nombrePropio = getSharedPreferences("AdminPrefs", MODE_PRIVATE).getString("farmaciaNombre", "Farmacia");
+            fotoPropia = getSharedPreferences("AdminPrefs", MODE_PRIVATE).getString("farmaciaFoto", "");
             // El idUsuario ya viene en el intent cuando el admin abre el chat desde la lista
             clienteNombreCompleto = nombreReceptor; // Si soy admin, el receptor es el cliente
+            clienteFoto = fotoReceptor;
+            farmaciaFoto = fotoPropia;
         } else {
             esAdmin = false;
             // Si es cliente, su ID está en UserPrefs
@@ -63,13 +69,40 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
                 nombrePropio = (userData.optString("nombres", "") + " " + userData.optString("apellidos", "")).trim();
                 if (nombrePropio.isEmpty()) nombrePropio = "Cliente";
                 clienteNombreCompleto = nombrePropio;
-            } catch (Exception e) { 
-                idPropio = "anon"; 
+                fotoPropia = userData.optString("foto", "");
+                clienteFoto = fotoPropia;
+                farmaciaFoto = fotoReceptor; // Si soy cliente, el receptor es la farmacia
+            } catch (Exception e) {
+                idPropio = "anon";
                 clienteNombreCompleto = "Cliente";
+                fotoPropia = "";
             }
         }
 
         tvTitulo.setText(nombreReceptor != null ? nombreReceptor : "Chat");
+        
+        // Fallback: Si no viene foto en el Intent, intentar buscarla en la DB
+        if (fotoReceptor == null || fotoReceptor.isEmpty()) {
+            if (!esAdmin) {
+                // Soy cliente, busco la foto de la farmacia en mi cache local
+                JSONObject farm = db.obtenerFarmaciaLocal(idFarmacia);
+                if (farm != null) fotoReceptor = farm.optString("foto", "");
+            } else {
+                // Soy admin, busco la foto del cliente en el último mensaje recibido
+                List<JSONObject> msgs = db.obtenerMensajesChat(idFarmacia, idUsuario);
+                for (int i = msgs.size() - 1; i >= 0; i--) {
+                    String f = msgs.get(i).optString("cliente_foto", "");
+                    if (!f.isEmpty()) {
+                        fotoReceptor = f;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (fotoReceptor != null && !fotoReceptor.isEmpty()) {
+            Utilidades.cargarImagenBase64(fotoReceptor, ivFoto);
+        }
 
         adapter = new MensajeriaAdapter(listaMensajes, idPropio);
         rvMensajes.setLayoutManager(new LinearLayoutManager(this));
@@ -153,6 +186,8 @@ public class ChatMensajeriaActivity extends AppCompatActivity {
             msg.put("id_usuario", idUsuario);
             msg.put("emisor_nombre", nombrePropio);
             msg.put("cliente_nombre_completo", clienteNombreCompleto);
+            msg.put("cliente_foto", clienteFoto);
+            msg.put("farmacia_foto", farmaciaFoto);
             msg.put("tipo_doc", "mensaje");
 
             db.guardarMensajeLocal(msg);

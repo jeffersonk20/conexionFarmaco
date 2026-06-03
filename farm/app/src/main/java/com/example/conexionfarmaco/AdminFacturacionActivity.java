@@ -134,42 +134,47 @@ public class AdminFacturacionActivity extends AppCompatActivity {
             return;
         }
 
+        // Carga progresiva para evitar congelamiento de la UI
+        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
         for (int i = 0; i < docs.length(); i++) {
-            try {
-                JSONObject pedidoFull = docs.getJSONObject(i);
-                
-                // IMPORTANTE: Filtrar los items para que el admin SOLO vea sus productos
-                JSONObject pedidoFiltrado = new JSONObject(pedidoFull.toString());
-                JSONArray itemsOriginales = pedidoFull.getJSONArray("items");
-                JSONArray itemsMios = new JSONArray();
-                double subtotalMio = 0;
+            final int index = i;
+            handler.postDelayed(() -> {
+                try {
+                    if (!isFinishing()) {
+                        JSONObject pedidoFull = docs.getJSONObject(index);
+                        
+                        // Filtrar los items para que el admin SOLO vea sus productos
+                        JSONObject pedidoFiltrado = new JSONObject(pedidoFull.toString());
+                        JSONArray itemsOriginales = pedidoFull.getJSONArray("items");
+                        JSONArray itemsMios = new JSONArray();
+                        double subtotalMio = 0;
 
-                for (int j = 0; j < itemsOriginales.length(); j++) {
-                    JSONObject item = itemsOriginales.getJSONObject(j);
-                    if (item.optString("id_farmacia").equals(farmaciaId)) {
-                        itemsMios.put(item);
-                        double precio = item.optDouble("precio", 0);
-                        int cant = item.optInt("cantidad", 1);
-                        subtotalMio += (precio * cant);
+                        for (int j = 0; j < itemsOriginales.length(); j++) {
+                            JSONObject item = itemsOriginales.getJSONObject(j);
+                            if (item.optString("id_farmacia").equals(farmaciaId)) {
+                                itemsMios.put(item);
+                                double precio = item.optDouble("precio", 0);
+                                int cant = item.optInt("cantidad", 1);
+                                subtotalMio += (precio * cant);
+                            }
+                        }
+
+                        if (itemsMios.length() > 0) {
+                            pedidoFiltrado.put("items", itemsMios);
+                            pedidoFiltrado.put("total_farmacia", subtotalMio);
+
+                            String metodo = pedidoFull.optString("metodo_pago", "");
+                            if (metodo.equalsIgnoreCase("efectivo")) {
+                                agregarCardPedido(pedidoFiltrado, containerReservas);
+                            } else {
+                                agregarCardPedido(pedidoFiltrado, containerPagosOnline);
+                            }
+                        }
                     }
+                } catch (Exception e) {
+                    Log.e("AdminFact", "Error filtrando pedido", e);
                 }
-
-                // Si por alguna razón este pedido no tiene items de esta farmacia, lo saltamos
-                if (itemsMios.length() == 0) continue;
-
-                // Actualizamos el objeto para mostrar solo lo relevante a este admin
-                pedidoFiltrado.put("items", itemsMios);
-                pedidoFiltrado.put("total_farmacia", subtotalMio);
-
-                String metodo = pedidoFull.optString("metodo_pago", "");
-                if (metodo.equalsIgnoreCase("efectivo")) {
-                    agregarCardPedido(pedidoFiltrado, containerReservas);
-                } else {
-                    agregarCardPedido(pedidoFiltrado, containerPagosOnline);
-                }
-            } catch (Exception e) {
-                Log.e("AdminFact", "Error filtrando pedido", e);
-            }
+            }, (long) i * 50);
         }
     }
 
