@@ -77,7 +77,7 @@ public class Utilidades {
     static String passwd = "200612";
     static String credencialesCodificadas = Base64.encodeToString((user + ":" + passwd).getBytes(), Base64.NO_WRAP);
 
-    private static final String GEMINI_API_KEY = "AIzaSyC3sTFfNZSJ8I8JmHvpGAUw9ScrwkX1q2M";
+    private static final String GEMINI_API_KEY = "#";
 
     private static GenerativeModelFutures modelInstance;
 
