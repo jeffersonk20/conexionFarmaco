@@ -37,7 +37,8 @@
             android:layout_height="160dp"
             android:layout_marginBottom="60dp"
             app:cardCornerRadius="80dp"
-            app:cardElevation="10dp">
+            app:cardElevation="10dp"
+            app:cardBackgroundColor="@color/white">
             <ImageView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"

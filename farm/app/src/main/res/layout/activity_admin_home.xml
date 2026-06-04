@@ -22,15 +22,6 @@
                 android:paddingHorizontal="16dp">
 
                 <ImageView
-                    android:id="@+id/ivAdminMenu"
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:layout_centerVertical="true"
-                    android:src="@android:drawable/ic_menu_sort_by_size"
-                    app:tint="@color/white"
-                    android:contentDescription="Menú" />
-
-                <ImageView
                     android:id="@+id/ivAdminChat"
                     android:layout_width="32dp"
                     android:layout_height="32dp"
