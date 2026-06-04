@@ -131,7 +131,8 @@
                 android:layout_height="wrap_content"
                 android:layout_margin="12dp"
                 app:cardCornerRadius="10dp"
-                app:cardElevation="3dp">
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/white">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
@@ -153,6 +154,7 @@
                         android:paddingStart="10dp"
                         android:textSize="15sp"
                         android:textColor="@color/azul_primario"
+                        android:textColorHint="@color/texto_secundario"
                         android:importantForAutofill="no"
                         android:inputType="text" />
                 </LinearLayout>
