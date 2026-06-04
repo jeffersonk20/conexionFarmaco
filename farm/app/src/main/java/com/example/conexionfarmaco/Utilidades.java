@@ -60,19 +60,19 @@ public class Utilidades {
     }
 
     // ... URLs ...
-    static String url_consulta = "http://10.142.171.188:5984/usuarios/_design/usuarios/_view/usuarios";
-    static String url_mto = "http://10.142.171.188:5984/usuarios";
-    static String url_find = "http://10.142.171.188:5984/usuarios/_find";
+    static String url_consulta = "http://192.168.82.233:5984/usuarios/_design/usuarios/_view/usuarios";
+    static String url_mto = "http://192.168.82.233:5984/usuarios";
+    static String url_find = "http://192.168.82.233:5984/usuarios/_find";
     
     // Rutas para el sistema de Farmacias
-    static String url_farmacias = "http://10.142.171.188:5984/farmacias";
-    static String url_medicamentos = "http://10.142.171.188:5984/medicamentos";
-    static String url_pedidos = "http://10.142.171.188:5984/pedidos";
+    static String url_farmacias = "http://192.168.82.233:5984/farmacias";
+    static String url_medicamentos = "http://192.168.82.233:5984/medicamentos";
+    static String url_pedidos = "http://192.168.82.233:5984/pedidos";
     
     // Selectores CouchDB
-    static String url_find_farmacias = "http://10.142.171.188:5984/farmacias/_find";
-    static String url_find_medicamentos = "http://10.142.171.188:5984/medicamentos/_find";
-    static String url_find_pedidos = "http://10.142.171.188:5984/pedidos/_find";
+    static String url_find_farmacias = "http://192.168.82.233:5984/farmacias/_find";
+    static String url_find_medicamentos = "http://192.168.82.233:5984/medicamentos/_find";
+    static String url_find_pedidos = "http://192.168.82.233:5984/pedidos/_find";
 
     static String user = "steven";
     static String passwd = "200612";

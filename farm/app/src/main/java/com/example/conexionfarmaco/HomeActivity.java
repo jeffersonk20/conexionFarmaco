@@ -21,7 +21,7 @@ public class HomeActivity extends AppCompatActivity {
     private LinearLayout containerPromociones, containerBusqueda;
     private EditText etBuscador;
     private TextView tvDestacados, tvTituloInfoSalud;
-    private View cardInfoSalud;
+    private View cardInfoSalud, cartBubbleEffect, screenDimmer;
     private String userEnfermedades = "", userAlergias = "";
 
     @Override
@@ -35,6 +35,8 @@ public class HomeActivity extends AppCompatActivity {
         tvDestacados = findViewById(R.id.tvDestacados);
         cardInfoSalud = findViewById(R.id.cardInfoSalud);
         tvTituloInfoSalud = findViewById(R.id.tvTituloInfoSalud);
+        cartBubbleEffect = findViewById(R.id.cartBubbleEffect);
+        screenDimmer = findViewById(R.id.screenDimmer);
 
         // Obtener datos del usuario para recomendaciones
         cargarDatosUsuario();
@@ -437,6 +439,35 @@ public class HomeActivity extends AppCompatActivity {
             }
 
             prefs.edit().putString("cart", cart.toString()).apply();
+            
+            // Efecto de burbuja flotante y oscurecimiento de pantalla
+            if (cartBubbleEffect != null && screenDimmer != null) {
+                // Preparar y mostrar dimmer
+                screenDimmer.setAlpha(0f);
+                screenDimmer.setVisibility(View.VISIBLE);
+                screenDimmer.animate().alpha(1f).setDuration(200).start();
+
+                // Animación de la burbuja
+                cartBubbleEffect.setVisibility(View.VISIBLE);
+                cartBubbleEffect.setScaleX(0.2f);
+                cartBubbleEffect.setScaleY(0.2f);
+                cartBubbleEffect.setAlpha(1.0f);
+                
+                cartBubbleEffect.animate()
+                        .scaleX(3.0f)
+                        .scaleY(3.0f)
+                        .alpha(0f)
+                        .setDuration(800)
+                        .withEndAction(() -> {
+                            cartBubbleEffect.setVisibility(View.GONE);
+                            // Desvanecer dimmer al terminar
+                            screenDimmer.animate().alpha(0f).setDuration(300)
+                                    .withEndAction(() -> screenDimmer.setVisibility(View.GONE))
+                                    .start();
+                        })
+                        .start();
+            }
+
             Toast.makeText(this, "Agregado al carrito", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             Toast.makeText(this, "Error al agregar", Toast.LENGTH_SHORT).show();
