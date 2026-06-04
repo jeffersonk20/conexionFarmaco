@@ -174,10 +174,10 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
     }
 
     private void guardarMedicamento() {
-        String nom = etNombre.getText().toString();
-        String pre = etPrecio.getText().toString();
-        String sto = etStock.getText().toString();
-        String preS = etPresentacion.getText().toString();
+        String nom = etNombre.getText().toString().trim();
+        String pre = etPrecio.getText().toString().trim();
+        String sto = etStock.getText().toString().trim();
+        String preS = etPresentacion.getText().toString().trim();
         boolean pro = cbPromocion.isChecked();
         String enf = spEnfermedad.getSelectedItem().toString();
 
@@ -185,7 +185,11 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
             Toast.makeText(this, "Nombre y precio son requeridos", Toast.LENGTH_SHORT).show();
             return;
         }
+        
+        // Si el stock está vacío, por defecto es 0
+        if (sto.isEmpty()) sto = "0";
 
+        final String finalSto = sto;
         new Thread(() -> {
             try {
                 JSONObject json = medEdicion != null ? medEdicion : new JSONObject();
@@ -197,7 +201,7 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                 
                 json.put("nombre", nom);
                 json.put("precio", pre);
-                json.put("stock", sto);
+                json.put("stock", finalSto);
                 json.put("presentacion", preS);
                 json.put("promocion", pro);
                 json.put("enfermedad_objetivo", enf);
@@ -214,8 +218,9 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                         Utilidades.url_medicamentos;
 
                 DBHelper dbHelper = new DBHelper(this);
-                // Guardar localmente siempre
-                dbHelper.guardarMedicamentoLocal(json);
+                
+                // 1. ACTUALIZACIÓN LOCAL FORZADA: Para que el Admin vea el cambio al instante
+                dbHelper.guardarMedicamentoCache(json, true);
                 
                 if (Utilidades.hayInternet(this)) {
                     TareaServidor tarea = new TareaServidor();
@@ -225,21 +230,21 @@ public class AdminMedicamentoActivity extends AppCompatActivity {
                     if (resJson.optBoolean("ok", false)) {
                         // Actualizar el _rev local con el que devolvió el servidor
                         json.put("_rev", resJson.getString("rev"));
-                        dbHelper.guardarMedicamentoLocal(json);
+                        dbHelper.guardarMedicamentoCache(json, true);
 
                         runOnUiThread(() -> {
-                            Toast.makeText(this, "Guardado correctamente", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Stock actualizado correctamente", Toast.LENGTH_SHORT).show();
                             finish();
                         });
                         return;
                     }
                 }
 
-                // Si no hay internet o falló el servidor, agregar a pendientes
+                // Si no hay internet o falló el servidor temporalmente, agregar a pendientes
                 dbHelper.agregarPendiente(url, metodo, json.toString(), "couchdb");
                 Utilidades.sincronizar(this);
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Guardado localmente. Se sincronizará al conectar.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Guardado localmente. El cliente lo verá pronto.", Toast.LENGTH_SHORT).show();
                     finish();
                 });
 

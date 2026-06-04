@@ -9,6 +9,7 @@ import android.util.Base64;
 import android.widget.ImageView;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -142,6 +143,84 @@ public class Utilidades {
 
     public static String generarId() {
         return java.util.UUID.randomUUID().toString();
+    }
+
+    /**
+     * Descuenta el stock de los medicamentos comprados tanto localmente como en el servidor.
+     * Funciona para pagos en efectivo y con tarjeta.
+     */
+    public static void descontarStock(Context context, JSONArray cartItems) {
+        if (cartItems == null || cartItems.length() == 0) {
+            Log.w("Stock", "Carrito vacío, nada que descontar.");
+            return;
+        }
+        
+        DBHelper db = new DBHelper(context);
+        for (int i = 0; i < cartItems.length(); i++) {
+            try {
+                JSONObject itemCarrito = cartItems.getJSONObject(i);
+                
+                // Obtener ID único del medicamento (soportar _id o id)
+                String idMed = itemCarrito.optString("_id", itemCarrito.optString("id", ""));
+                int cantidadComprada = itemCarrito.optInt("cantidad", 0);
+
+                if (idMed.isEmpty() || cantidadComprada <= 0) {
+                    Log.w("Stock", "Item omitido: ID '" + idMed + "' inválido o cantidad <= 0 (" + cantidadComprada + ")");
+                    continue;
+                }
+
+                // 1. Obtener el documento actual desde el cache local
+                JSONObject medDoc = db.obtenerMedicamentoPorId(idMed);
+                
+                if (medDoc == null) {
+                    Log.d("Stock", "Medicamento " + idMed + " no en cache, reconstruyendo...");
+                    medDoc = new JSONObject(itemCarrito.toString());
+                    medDoc.remove("cantidad");
+                } else {
+                    // Sincronizar campos del carrito por si el cache está incompleto
+                    JSONArray keys = itemCarrito.names();
+                    if (keys != null) {
+                        for (int j = 0; j < keys.length(); j++) {
+                            String key = keys.getString(j);
+                            if (!key.equals("cantidad") && !medDoc.has(key)) {
+                                medDoc.put(key, itemCarrito.get(key));
+                            }
+                        }
+                    }
+                }
+
+                // 2. Calcular el nuevo stock
+                int stockAnterior = 0;
+                Object stockObj = medDoc.opt("stock");
+                if (stockObj instanceof Number) {
+                    stockAnterior = ((Number) stockObj).intValue();
+                } else {
+                    try {
+                        stockAnterior = Integer.parseInt(String.valueOf(stockObj));
+                    } catch (Exception e) {
+                        stockAnterior = itemCarrito.optInt("stock", 0);
+                    }
+                }
+
+                int nuevoStock = Math.max(0, stockAnterior - cantidadComprada);
+                medDoc.put("stock", String.valueOf(nuevoStock));
+
+                Log.d("Stock", "Actualizando localmente " + idMed + ": " + stockAnterior + " -> " + nuevoStock);
+
+                // 3. ACTUALIZACIÓN LOCAL INMEDIATA
+                db.guardarMedicamentoCache(medDoc, true);
+
+                // 4. ACTUALIZACIÓN EN SERVIDOR (CouchDB)
+                String urlDoc = url_medicamentos + "/" + idMed;
+                db.agregarPendiente(urlDoc, "PUT", medDoc.toString(), "couchdb");
+
+            } catch (Exception e) {
+                Log.e("Utilidades", "Error crítico descontando stock para item en índice " + i, e);
+            }
+        }
+        
+        // Disparar sincronización para que el cambio suba a la nube inmediatamente
+        sincronizar(context);
     }
 
     public static boolean hayInternet(Context context) {

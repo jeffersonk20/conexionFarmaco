@@ -24,7 +24,7 @@ public class HistorialPedidosActivity extends AppCompatActivity {
         setContentView(R.layout.activity_historial_pedidos);
 
         containerHistorial = findViewById(R.id.containerHistorial);
-        findViewById(R.id.btnHistorialAtras).setOnClickListener(v -> finish());
+        findViewById(R.id.btnHistorialAtras).setOnClickListener(v -> irAHome());
 
         try {
             String userData = getSharedPreferences("UserPrefs", MODE_PRIVATE).getString("userData", "");
@@ -35,6 +35,19 @@ public class HistorialPedidosActivity extends AppCompatActivity {
         } catch (Exception e) {}
 
         cargarHistorial();
+    }
+
+    @Override
+    public void onBackPressed() {
+        irAHome();
+    }
+
+    private void irAHome() {
+        // Redirigir al Home de forma limpia
+        android.content.Intent intent = new android.content.Intent(this, HomeActivity.class);
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 
     private void cargarHistorial() {

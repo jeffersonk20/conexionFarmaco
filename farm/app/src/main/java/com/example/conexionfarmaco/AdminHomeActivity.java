@@ -117,12 +117,13 @@ public class AdminHomeActivity extends AppCompatActivity {
             } catch (Exception e) {}
         }).start();
 
-        // 2. Stock Bajo (se calcula al cargar medicamentos)
+        // 2. Stock Bajo: Calculado de forma más robusta
         int stockBajo = 0;
         for (int i = 0; i < listaOriginalMedicamentos.length(); i++) {
             try {
-                int stock = Integer.parseInt(listaOriginalMedicamentos.getJSONObject(i).optString("stock", "0"));
-                if (stock < 5) stockBajo++;
+                JSONObject med = listaOriginalMedicamentos.getJSONObject(i);
+                int stockValue = med.optInt("stock", 0);
+                if (stockValue < 5) stockBajo++;
             } catch (Exception e) {}
         }
         tvStatStockBajo.setText(String.valueOf(stockBajo));
@@ -175,8 +176,44 @@ public class AdminHomeActivity extends AppCompatActivity {
 
         Utilidades.sincronizar(this);
         cargarMedicamentos();
+        sincronizarPedidosBackground(); // Nueva sincronización de pedidos para el dashboard
         actualizarDashboard();
         cargarPerfilBackground();
+    }
+
+    private void sincronizarPedidosBackground() {
+        if (farmaciaId.isEmpty() || !Utilidades.hayInternet(this)) return;
+
+        new Thread(() -> {
+            try {
+                JSONObject selector = new JSONObject();
+                JSONObject query = new JSONObject();
+                query.put("farmacias_ids", new JSONObject().put("$elemMatch", new JSONObject().put("$eq", farmaciaId)));
+                selector.put("selector", query);
+                selector.put("limit", 100);
+
+                TareaServidor tarea = new TareaServidor();
+                String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
+                
+                JSONObject resJson = new JSONObject(res);
+                if (resJson.has("docs")) {
+                    JSONArray docs = resJson.getJSONArray("docs");
+                    DBHelper db = new DBHelper(this);
+                    
+                    // Limpiar pedidos locales de esta farmacia para evitar "fantasmas" o duplicados
+                    db.limpiarPedidosFarmacia(farmaciaId);
+                    
+                    for (int i = 0; i < docs.length(); i++) {
+                        db.guardarPedidoLocal(docs.getJSONObject(i));
+                    }
+                    
+                    // Una vez sincronizado, refrescamos el contador del dashboard
+                    runOnUiThread(this::actualizarDashboard);
+                }
+            } catch (Exception e) {
+                Log.e("AdminHome", "Error sincronizando pedidos background", e);
+            }
+        }).start();
     }
 
     private void cargarPerfilBackground() {

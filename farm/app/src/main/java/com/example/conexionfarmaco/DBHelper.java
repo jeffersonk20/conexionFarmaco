@@ -198,9 +198,19 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public void guardarMedicamentoCache(JSONObject med, boolean forzar) {
         try {
-            String id = med.getString("_id");
-            if (!forzar && (estaPendienteSincronizacion(id) || estaMarcadoComoBorrado(id))) return;
+            String id = med.optString("_id", med.optString("id", ""));
+            if (id.isEmpty()) return;
+            
+            if (!forzar && estaMarcadoComoBorrado(id)) return;
+            
             SQLiteDatabase db = getWritableDatabase();
+            
+            // Protección contra sobreescritura de cambios locales no sincronizados
+            if (!forzar && estaPendienteSincronizacion(id)) {
+                Log.d("DBHelper", "Protegiendo medicamento " + id + " de sobreescritura por sync pendiente");
+                return; // Bloqueamos la actualización del servidor si tenemos algo pendiente localmente
+            }
+
             ContentValues cv = new ContentValues();
             cv.put("id", id);
             cv.put("rev", med.optString("_rev", ""));
@@ -251,8 +261,8 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void limpiarMedicamentosFarmacia(String farmaciaId) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        db.delete("medicamentos", "id_farmacia = ? AND is_deleted = 0", new String[]{farmaciaId});
+        // Solo limpiar si NO hay sincronizaciones pendientes
+        getWritableDatabase().execSQL("DELETE FROM medicamentos WHERE id_farmacia = ? AND is_deleted = 0 AND id NOT IN (SELECT SUBSTR(url, INSTR(url, '/medicamentos/') + 14) FROM pendientes WHERE url LIKE '%/medicamentos/%')", new String[]{farmaciaId});
     }
 
     public void limpiarFarmaciasCache() {
@@ -261,7 +271,8 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void limpiarMedicamentosPromocion() {
-        getWritableDatabase().delete("medicamentos", "promocion = 1 AND is_deleted = 0", null);
+        // Solo limpiar si NO hay una sincronización pendiente para ese medicamento
+        getWritableDatabase().execSQL("DELETE FROM medicamentos WHERE promocion = 1 AND is_deleted = 0 AND id NOT IN (SELECT SUBSTR(url, INSTR(url, '/medicamentos/') + 14) FROM pendientes WHERE url LIKE '%/medicamentos/%')");
     }
 
     public void limpiarDatosHuerfanos() {
@@ -610,6 +621,34 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public Cursor loginFarmacia(String correo, String clave) {
         return getReadableDatabase().rawQuery("SELECT * FROM farmacias WHERE LOWER(correo)=LOWER(?) AND clave=?", new String[]{correo, clave});
+    }
+
+    public JSONObject obtenerMedicamentoPorId(String idMed) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM medicamentos WHERE id = ?", new String[]{idMed});
+        JSONObject obj = null;
+        if (cursor.moveToFirst()) {
+            try {
+                obj = new JSONObject();
+                obj.put("_id", cursor.getString(cursor.getColumnIndexOrThrow("id")));
+                obj.put("_rev", cursor.getString(cursor.getColumnIndexOrThrow("rev")));
+                obj.put("id_farmacia", cursor.getString(cursor.getColumnIndexOrThrow("id_farmacia")));
+                obj.put("nombre", cursor.getString(cursor.getColumnIndexOrThrow("nombre")));
+                obj.put("precio", cursor.getString(cursor.getColumnIndexOrThrow("precio")));
+                obj.put("stock", cursor.getString(cursor.getColumnIndexOrThrow("stock")));
+                obj.put("presentacion", cursor.getString(cursor.getColumnIndexOrThrow("presentacion")));
+                obj.put("promocion", cursor.getInt(cursor.getColumnIndexOrThrow("promocion")) == 1);
+                obj.put("foto1", cursor.getString(cursor.getColumnIndexOrThrow("foto1")));
+                obj.put("foto2", cursor.getString(cursor.getColumnIndexOrThrow("foto2")));
+                obj.put("foto3", cursor.getString(cursor.getColumnIndexOrThrow("foto3")));
+                obj.put("nombre_farmacia", cursor.getString(cursor.getColumnIndexOrThrow("nombre_farmacia")));
+                obj.put("enfermedad_objetivo", cursor.getString(cursor.getColumnIndexOrThrow("enfermedad_objetivo")));
+            } catch (Exception e) {
+                Log.e("DBHelper", "Error al parsear med", e);
+            }
+        }
+        cursor.close();
+        return obj;
     }
 
     public void actualizarRevEnPendientes(String id, String nuevoRev) {
