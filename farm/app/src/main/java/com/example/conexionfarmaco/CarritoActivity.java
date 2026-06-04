@@ -85,9 +85,19 @@ public class CarritoActivity extends AppCompatActivity {
                 
                 view.findViewById(R.id.btnSumar).setOnClickListener(v -> {
                     try {
-                        item.put("cantidad", item.getInt("cantidad") + 1);
-                        tvCant.setText(String.valueOf(item.getInt("cantidad")));
-                        guardarCarrito();
+                        int stock = 0;
+                        Object s = item.opt("stock");
+                        if (s instanceof Number) stock = ((Number) s).intValue();
+                        else if (s != null) stock = Integer.parseInt(String.valueOf(s));
+
+                        int actual = item.getInt("cantidad");
+                        if (actual < stock) {
+                            item.put("cantidad", actual + 1);
+                            tvCant.setText(String.valueOf(item.getInt("cantidad")));
+                            guardarCarrito();
+                        } else {
+                            android.widget.Toast.makeText(this, "Límite de stock alcanzado (" + stock + ")", android.widget.Toast.LENGTH_SHORT).show();
+                        }
                     } catch (Exception e) {}
                 });
 

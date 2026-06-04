@@ -150,10 +150,19 @@ public class HistorialPedidosActivity extends AppCompatActivity {
 
             itemView.findViewById(R.id.btnSumar).setOnClickListener(v -> {
                 try {
-                    int c = item.getInt("cantidad") + 1;
-                    item.put("cantidad", c);
-                    tvCant.setText(String.valueOf(c));
-                    btnGuardar.setVisibility(View.VISIBLE);
+                    int stock = 0;
+                    Object s = item.opt("stock");
+                    if (s instanceof Number) stock = ((Number) s).intValue();
+                    else if (s != null) stock = Integer.parseInt(String.valueOf(s));
+
+                    int actual = item.getInt("cantidad");
+                    if (actual < stock) {
+                        item.put("cantidad", actual + 1);
+                        tvCant.setText(String.valueOf(actual + 1));
+                        btnGuardar.setVisibility(View.VISIBLE);
+                    } else {
+                        Toast.makeText(this, "Límite de stock alcanzado (" + stock + ")", Toast.LENGTH_SHORT).show();
+                    }
                 } catch (Exception e) {}
             });
 
