@@ -60,19 +60,19 @@ public class Utilidades {
     }
 
     // ... URLs ...
-    static String url_consulta = "http://192.168.101.10:5984/usuarios/_design/usuarios/_view/usuarios";
-    static String url_mto = "http://192.168.101.10:5984/usuarios";
-    static String url_find = "http://192.168.101.10:5984/usuarios/_find";
+    static String url_consulta = "http://10.142.171.188:5984/usuarios/_design/usuarios/_view/usuarios";
+    static String url_mto = "http://10.142.171.188:5984/usuarios";
+    static String url_find = "http://10.142.171.188:5984/usuarios/_find";
     
     // Rutas para el sistema de Farmacias
-    static String url_farmacias = "http://192.168.101.10:5984/farmacias";
-    static String url_medicamentos = "http://192.168.101.10:5984/medicamentos";
-    static String url_pedidos = "http://192.168.101.10:5984/pedidos";
+    static String url_farmacias = "http://10.142.171.188:5984/farmacias";
+    static String url_medicamentos = "http://10.142.171.188:5984/medicamentos";
+    static String url_pedidos = "http://10.142.171.188:5984/pedidos";
     
     // Selectores CouchDB
-    static String url_find_farmacias = "http://192.168.101.10:5984/farmacias/_find";
-    static String url_find_medicamentos = "http://192.168.101.10:5984/medicamentos/_find";
-    static String url_find_pedidos = "http://192.168.101.10:5984/pedidos/_find";
+    static String url_find_farmacias = "http://10.142.171.188:5984/farmacias/_find";
+    static String url_find_medicamentos = "http://10.142.171.188:5984/medicamentos/_find";
+    static String url_find_pedidos = "http://10.142.171.188:5984/pedidos/_find";
 
     static String user = "steven";
     static String passwd = "200612";
@@ -104,17 +104,47 @@ public class Utilidades {
         try {
             DBHelper db = new DBHelper(context);
             // Limpiar la pregunta para extraer la palabra clave del medicamento
+            // Usamos una limpieza más robusta para capturar el nombre del producto, incluyendo errores como "nececito"
             String queryBusqueda = preguntaCliente.toLowerCase()
-                    .replace("¿", "").replace("?", "").replace("tienen", "")
-                    .replace("venden", "").replace("busco", "").replace("hay", "")
-                    .replace("necesito", "").trim();
+                    .replaceAll("(?i)\\b(hola|buenos|dias|tardes|noches|busco|necesito|nececito|tienes|tienen|hay|venden|vende|quisiera|queria|comprar|donde|puedo|encontrar|si|tendra|tendran|existencia|disponible|disponibilidad|por|favor|gracias|quiero|necesitaria)\\b", "")
+                    .replaceAll("[¿?¡!]", "")
+                    .trim();
 
             List<JSONObject> recomendados = db.obtenerMedicamentosCache(queryBusqueda, false);
+
+            // Si no hay resultados con la frase completa, intentamos buscar por palabras individuales significativas
+            if (recomendados.isEmpty() && queryBusqueda.contains(" ")) {
+                for (String palabra : queryBusqueda.split("\\s+")) {
+                    if (palabra.length() > 3) {
+                        List<JSONObject> partial = db.obtenerMedicamentosCache(palabra, false);
+                        for (JSONObject p : partial) {
+                            boolean existe = false;
+                            for (JSONObject r : recomendados) {
+                                if (r.optString("_id").equals(p.optString("_id"))) {
+                                    existe = true;
+                                    break;
+                                }
+                            }
+                            if (!existe) recomendados.add(p);
+                        }
+                    }
+                }
+            }
             
             int encontrados = 0;
             for (JSONObject med : recomendados) {
                 if (encontrados >= 5) break; // Suficientes opciones para ser breve
-                int stock = med.optInt("stock", 0);
+                
+                // Manejo robusto de stock (puede venir como String desde SQLite)
+                int stock = 0;
+                try {
+                    Object s = med.opt("stock");
+                    if (s instanceof Number) stock = ((Number) s).intValue();
+                    else stock = Integer.parseInt(String.valueOf(s));
+                } catch (Exception e) {
+                    stock = med.optInt("stock", 0);
+                }
+
                 if (stock > 0) {
                     inventario.append("PRODUCTO: ").append(med.optString("nombre"))
                             .append(" | PRECIO: $").append(med.optString("precio"))
