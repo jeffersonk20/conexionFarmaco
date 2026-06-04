@@ -12,6 +12,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
 public class AdminFacturacionActivity extends AppCompatActivity {
 
@@ -67,6 +71,7 @@ public class AdminFacturacionActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Solo cargar si no se hizo recientemente (opcional) o asegurar que no duplique
         cargarPedidos();
     }
 
@@ -79,12 +84,21 @@ public class AdminFacturacionActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 DBHelper db = new DBHelper(this);
+                // 1. CARGA INMEDIATA DESDE CACHE (Para velocidad instantánea)
+                List<JSONObject> cache = db.obtenerPedidosPorFarmacia(farmaciaId);
+                JSONArray jsonCache = new JSONArray();
+                for (JSONObject o : cache) jsonCache.put(o);
+                
+                final JSONArray finalJsonCache = jsonCache;
+                runOnUiThread(() -> mostrarPedidos(finalJsonCache, farmaciaId));
+
+                // 2. ACTUALIZACIÓN SILENCIOSA DESDE LA NUBE
                 if (Utilidades.hayInternet(this)) {
                     JSONObject selector = new JSONObject();
                     JSONObject query = new JSONObject();
-                    // Solo traer pedidos que involucren a ESTA farmacia
                     query.put("farmacias_ids", new JSONObject().put("$elemMatch", new JSONObject().put("$eq", farmaciaId)));
                     selector.put("selector", query);
+                    selector.put("limit", 100);
 
                     TareaServidor tarea = new TareaServidor();
                     String res = tarea.execute(selector.toString(), "POST", Utilidades.url_find_pedidos).get();
@@ -96,29 +110,19 @@ public class AdminFacturacionActivity extends AppCompatActivity {
                         for (int i = 0; i < docs.length(); i++) {
                             db.guardarPedidoLocal(docs.getJSONObject(i));
                         }
-                        runOnUiThread(() -> mostrarPedidos(docs, farmaciaId));
-                        return;
+                        
+                        // Recargar desde cache limpia para asegurar orden y sin duplicados
+                        List<JSONObject> finalCache = db.obtenerPedidosPorFarmacia(farmaciaId);
+                        JSONArray jsonFinal = new JSONArray();
+                        for (JSONObject o : finalCache) jsonFinal.put(o);
+                        
+                        final JSONArray finalJsonFinal = jsonFinal;
+                        runOnUiThread(() -> mostrarPedidos(finalJsonFinal, farmaciaId));
                     }
                 }
-
-                // Modo Offline: Filtrar el cache local por farmaciaId
-                java.util.List<JSONObject> cache = db.obtenerPedidosAdminCache();
-                JSONArray filtrados = new JSONArray();
-                for (JSONObject p : cache) {
-                    JSONArray fIds = p.optJSONArray("farmacias_ids");
-                    if (fIds != null) {
-                        for (int i = 0; i < fIds.length(); i++) {
-                            if (fIds.getString(i).equals(farmaciaId)) {
-                                filtrados.put(p);
-                                break;
-                            }
-                        }
-                    }
-                }
-                runOnUiThread(() -> mostrarPedidos(filtrados, farmaciaId));
-
             } catch (Exception e) {
                 Log.e("AdminFact", "Error carga pedidos", e);
+                runOnUiThread(() -> { if(progressBar != null) progressBar.setVisibility(View.GONE); });
             }
         }).start();
     }
@@ -129,52 +133,49 @@ public class AdminFacturacionActivity extends AppCompatActivity {
         containerReservas.removeAllViews();
         containerPagosOnline.removeAllViews();
         
-        if (docs.length() == 0) {
-            Toast.makeText(this, "No hay pedidos para su farmacia", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (docs.length() == 0) return;
 
-        // Carga progresiva para evitar congelamiento de la UI
-        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        // Set para evitar duplicados visuales por si acaso
+        java.util.Set<String> idsProcesados = new java.util.HashSet<>();
+
         for (int i = 0; i < docs.length(); i++) {
-            final int index = i;
-            handler.postDelayed(() -> {
-                try {
-                    if (!isFinishing()) {
-                        JSONObject pedidoFull = docs.getJSONObject(index);
-                        
-                        // Filtrar los items para que el admin SOLO vea sus productos
-                        JSONObject pedidoFiltrado = new JSONObject(pedidoFull.toString());
-                        JSONArray itemsOriginales = pedidoFull.getJSONArray("items");
-                        JSONArray itemsMios = new JSONArray();
-                        double subtotalMio = 0;
+            try {
+                JSONObject pedidoFull = docs.getJSONObject(i);
+                String id = pedidoFull.optString("_id");
+                
+                if (idsProcesados.contains(id)) continue;
+                idsProcesados.add(id);
+                
+                // Filtrar los items para que el admin SOLO vea sus productos
+                JSONObject pedidoFiltrado = new JSONObject(pedidoFull.toString());
+                JSONArray itemsOriginales = pedidoFull.getJSONArray("items");
+                JSONArray itemsMios = new JSONArray();
+                double subtotalMio = 0;
 
-                        for (int j = 0; j < itemsOriginales.length(); j++) {
-                            JSONObject item = itemsOriginales.getJSONObject(j);
-                            if (item.optString("id_farmacia").equals(farmaciaId)) {
-                                itemsMios.put(item);
-                                double precio = item.optDouble("precio", 0);
-                                int cant = item.optInt("cantidad", 1);
-                                subtotalMio += (precio * cant);
-                            }
-                        }
-
-                        if (itemsMios.length() > 0) {
-                            pedidoFiltrado.put("items", itemsMios);
-                            pedidoFiltrado.put("total_farmacia", subtotalMio);
-
-                            String metodo = pedidoFull.optString("metodo_pago", "");
-                            if (metodo.equalsIgnoreCase("efectivo")) {
-                                agregarCardPedido(pedidoFiltrado, containerReservas);
-                            } else {
-                                agregarCardPedido(pedidoFiltrado, containerPagosOnline);
-                            }
-                        }
+                for (int j = 0; j < itemsOriginales.length(); j++) {
+                    JSONObject item = itemsOriginales.getJSONObject(j);
+                    if (item.optString("id_farmacia").equals(farmaciaId)) {
+                        itemsMios.put(item);
+                        double precio = item.optDouble("precio", 0);
+                        int cant = item.optInt("cantidad", 1);
+                        subtotalMio += (precio * cant);
                     }
-                } catch (Exception e) {
-                    Log.e("AdminFact", "Error filtrando pedido", e);
                 }
-            }, (long) i * 50);
+
+                if (itemsMios.length() > 0) {
+                    pedidoFiltrado.put("items", itemsMios);
+                    pedidoFiltrado.put("total_farmacia", subtotalMio);
+
+                    String metodo = pedidoFull.optString("metodo_pago", "");
+                    if (metodo.equalsIgnoreCase("efectivo")) {
+                        agregarCardPedido(pedidoFiltrado, containerReservas);
+                    } else {
+                        agregarCardPedido(pedidoFiltrado, containerPagosOnline);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("AdminFact", "Error filtrando pedido", e);
+            }
         }
     }
 

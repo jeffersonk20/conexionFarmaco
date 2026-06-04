@@ -14,7 +14,7 @@ import java.util.List;
 
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "conexion_farmaco.db";
-    private static final int DATABASE_VERSION = 20;
+    private static final int DATABASE_VERSION = 21;
 
     public DBHelper(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -24,8 +24,13 @@ public class DBHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE usuarios (id TEXT PRIMARY KEY, rev TEXT, nombres TEXT, apellidos TEXT, telefono TEXT, correo TEXT, clave TEXT, " +
                 "direccion TEXT, alergias TEXT, tipo_sangre TEXT, enfermedades TEXT, foto TEXT)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_usuarios_correo ON usuarios(correo)");
+        
         db.execSQL("CREATE TABLE farmacias (id TEXT PRIMARY KEY, rev TEXT, empresa TEXT, direccion TEXT, telefono TEXT, correo TEXT, clave TEXT, foto TEXT, descripcion TEXT, chat_habilitado INTEGER DEFAULT 0)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_farmacias_correo ON farmacias(correo)");
+        
         db.execSQL("CREATE TABLE medicamentos (id TEXT PRIMARY KEY, rev TEXT, id_farmacia TEXT, nombre TEXT, precio TEXT, stock TEXT, presentacion TEXT, promocion INTEGER, foto1 TEXT, foto2 TEXT, foto3 TEXT, nombre_farmacia TEXT, enfermedad_objetivo TEXT, is_deleted INTEGER DEFAULT 0)");
+        // ... (indexes)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_farmacia ON medicamentos(id_farmacia)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_enfermedad ON medicamentos(enfermedad_objetivo)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_deleted ON medicamentos(is_deleted)");
@@ -77,6 +82,10 @@ public class DBHelper extends SQLiteOpenHelper {
             try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_farmacia ON medicamentos(id_farmacia)"); } catch (Exception e) {}
             try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_enfermedad ON medicamentos(enfermedad_objetivo)"); } catch (Exception e) {}
             try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_med_deleted ON medicamentos(is_deleted)"); } catch (Exception e) {}
+        }
+        if (oldVersion < 21) {
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_usuarios_correo ON usuarios(correo)"); } catch (Exception e) {}
+            try { db.execSQL("CREATE INDEX IF NOT EXISTS idx_farmacias_correo ON farmacias(correo)"); } catch (Exception e) {}
         }
     }
 
@@ -387,6 +396,36 @@ public class DBHelper extends SQLiteOpenHelper {
         List<JSONObject> lista = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
         Cursor c = db.rawQuery("SELECT * FROM pedidos ORDER BY fecha DESC", null);
+        if (c.moveToFirst()) {
+            do {
+                try {
+                    JSONObject obj = new JSONObject();
+                    obj.put("_id", c.getString(c.getColumnIndexOrThrow("id")));
+                    obj.put("_rev", c.getString(c.getColumnIndexOrThrow("rev")));
+                    obj.put("cliente_correo", c.getString(c.getColumnIndexOrThrow("cliente_correo")));
+                    obj.put("cliente_nombre", c.getString(c.getColumnIndexOrThrow("cliente_nombre")));
+                    obj.put("cliente_direccion", c.getString(c.getColumnIndexOrThrow("cliente_direccion")));
+                    obj.put("cliente_telefono", c.getString(c.getColumnIndexOrThrow("cliente_telefono")));
+                    obj.put("items", new JSONArray(c.getString(c.getColumnIndexOrThrow("items"))));
+                    obj.put("total", c.getString(c.getColumnIndexOrThrow("total")));
+                    obj.put("fecha", c.getString(c.getColumnIndexOrThrow("fecha")));
+                    obj.put("estado", c.getString(c.getColumnIndexOrThrow("estado")));
+                    obj.put("metodo_pago", c.getString(c.getColumnIndexOrThrow("metodo_pago")));
+                    obj.put("farmacias_ids", new JSONArray(c.getString(c.getColumnIndexOrThrow("farmacias_ids"))));
+                    lista.add(obj);
+                } catch (Exception e) {}
+            } while (c.moveToNext());
+        }
+        c.close();
+        return lista;
+    }
+
+    public List<JSONObject> obtenerPedidosPorFarmacia(String farmaciaId) {
+        List<JSONObject> lista = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        // Usamos LIKE para buscar el ID de la farmacia dentro del array JSON farmacias_ids
+        Cursor c = db.rawQuery("SELECT * FROM pedidos WHERE farmacias_ids LIKE ? ORDER BY fecha DESC", 
+                new String[]{"%\"" + farmaciaId + "\"%"});
         if (c.moveToFirst()) {
             do {
                 try {
